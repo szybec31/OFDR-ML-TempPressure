@@ -1,0 +1,5 @@
+.idea/
+myvenv
+__pycache__
+.env
+PAKA_AI/
