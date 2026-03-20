@@ -3,3 +3,5 @@ myvenv/
 __pycache__
 .env
 PAKA_AI/
+.ipynb_checkpoints/
+Output_files/
