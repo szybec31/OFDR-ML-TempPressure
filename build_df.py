@@ -106,6 +106,29 @@ def build_dataframe():
 
     df = df.drop(columns=["base_folder", "file_suffix", "pair_key"], errors="ignore")
 
+    ## Ref ID:
+
+    # indeks pomiaru (np. 1, 2, 10)
+    df["idx"] = df["source_path"].str.extract(r'-(\d+)\.txt$')
+
+    # folder + channel (bez ciśnienia)
+    df["base"] = df["source_path"].str.extract(r'^(.*Switch_channel_\d-)')
+
+    # klucz: to co wspólne dla 0MPa i 0.5MPa
+    df["ref_key"] = df["base"] + df["idx"]
+
+    ref_map = (
+        df[df["pressure_raw_label"] == "0MPa"]
+        .drop_duplicates("ref_key")
+        .set_index("ref_key")["source_path"]
+    )
+
+    df["reference_zero_id"] = df["ref_key"].map(ref_map)
+
+    df.loc[df["pressure_raw_label"] == "0MPa", "reference_zero_id"] = None
+
+    df = df.drop(columns=["idx", "base", "ref_key"], errors="ignore")
+
     return df
 
 
