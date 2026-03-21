@@ -1,7 +1,7 @@
 from pathlib import Path
 import pandas as pd
 
-def build_dataframe(root_path="PAKA_AI"):
+def build_dataframe():
     # Column names in table
     columns = [
         "source_path",
@@ -11,7 +11,13 @@ def build_dataframe(root_path="PAKA_AI"):
         "series_id",
         "channel_raw",
         "channel_norm",
-        "pressure_raw_label"
+        "pressure_raw_label",
+        "pressure_corr_mpa",
+        "point_type",
+        "pair_id",
+        "role",
+        "is_complete_pair",
+        "reference_zero_id",
     ]
 
     root_dir = Path("PAKA_AI")                              # Root folder
@@ -55,8 +61,14 @@ def build_dataframe(root_path="PAKA_AI"):
         # np. Switch_channel_2-0.5MPa-1.txt
         try:
             pressure_raw = filename.split("-")[1]  # 0.5MPa
+            pressure_corr = float(pressure_raw.split("MPa")[0])
+            point_type = None if pressure_raw == None else "zero_start" if pressure_corr == 0 else "zero_end" if pressure_corr == 11 or pressure_corr == 0.01 else "pressure_point"
+            pressure_corr = None if pressure_raw == None else 0 if pressure_corr == 0 or pressure_corr == 11 or pressure_corr == 0.01 else pressure_corr
+
         except IndexError:
             pressure_raw = None
+            pressure_corr = None
+            point_type = None
 
         # === Add row ===
         rows.append({
@@ -67,9 +79,39 @@ def build_dataframe(root_path="PAKA_AI"):
             "series_id": series_id,
             "channel_raw": channel_raw,
             "channel_norm": channel_norm,
-            "pressure_raw_label": pressure_raw
+            "pressure_raw_label": pressure_raw,
+            "pressure_corr_mpa": pressure_corr,
+            "point_type": point_type,
+            "pair_id": None,
+            "role": None,
+            "is_complete_pair": None,
+            "reference_zero_id": None,
         })
 
     # Create DataFrame
     df = pd.DataFrame(rows,columns=columns)
+
+    # folder bazowy (do DT0_T23_15)
+    df["base_folder"] = df["source_path"].str.extract(r'^(PAKA_AI\\[^\\]+)')
+
+    # końcówka pliku
+    df["file_suffix"] = df["source_path"].str.extract(r'-(\d+\.?\d*MPa-\d+\.txt)$')
+
+    df["pair_key"] = df["base_folder"] + "\\" + df["file_suffix"]
+
+    counts = df.groupby("pair_key")["source_path"].transform("count")
+    df["is_complete_pair"] = counts == 2
+
+    df["pair_id"] = df.groupby("pair_key", group_keys=False).apply(get_pair)
+
+    df = df.drop(columns=["base_folder", "file_suffix", "pair_key"], errors="ignore")
+
     return df
+
+
+
+def get_pair(group):
+    paths = group["source_path"].tolist()
+    if len(paths) == 2:
+        return pd.Series(paths[::-1], index=group.index)
+    return pd.Series([None]*len(group), index=group.index)

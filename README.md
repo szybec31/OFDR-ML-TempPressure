@@ -9,9 +9,9 @@
    ```
 2. Create a virtual environment:
     ```
-    python -m venv myenv
-    myenv\Scripts\activate       # Windows
-    source myenv/bin/activate    # Linux/Mac 
+    python -m venv myvenv
+    myvenv\Scripts\activate       # Windows
+    source myvenv/bin/activate    # Linux/Mac 
     ```
 3. Install requirements:
    ```
