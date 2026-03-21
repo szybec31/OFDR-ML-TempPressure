@@ -1,0 +1,16 @@
+0MPa,0,zero_start
+11MPa,0,zero_end
+0.01MPa,0,zero_end
+10MPa,10,pressure_point
+1MPa,1,pressure_point
+2MPa,2,pressure_point
+3MPa,3,pressure_point
+4MPa,4,pressure_point
+5MPa,5,pressure_point
+6MPa,6,pressure_point
+7MPa,7,pressure_point
+8MPa,8,pressure_point
+9MPa,9,pressure_point
+0.1MPa,0.1,pressure_point
+0.2MPa,0.2,pressure_point
+0.5MPa,0.5,pressure_point

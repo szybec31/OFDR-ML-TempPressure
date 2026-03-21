@@ -129,6 +129,40 @@ def build_dataframe():
 
     df = df.drop(columns=["idx", "base", "ref_key"], errors="ignore")
 
+    # Roles
+
+    # df["role"] = "EDA;"
+    # df["role"] += "temp_calibration;" if df["pressure_corr_mpa"] == 0 and df["point_type"] == "zero_start" and df["pair_id"] is not None else ""
+    # df["role"] += "pressure_calibration;" if df["deltaT_label"] == 0 and df["pressure_corr_mpa"] >= 0 and df["pressure_corr_mpa"] <= 10 and df["point_type"] != "zero_end" and df["pair_id"] is not None else ""
+    # df["role"] += "joint_regression;" if df["pressure_corr_mpa"] >= 0 and df["pressure_corr_mpa"] <= 10 and df["pair_id"] is not None else "" # może bez zero_end?
+    # df["role"] += "repeatability_test;" if df["point_type"] == "zero_end" else "" # może również zero_start?
+
+    conditions = {
+        "temp_calibration;": (
+            (df["pressure_corr_mpa"] == 0) &
+            (df["point_type"] == "zero_start") &
+            (df["pair_id"].notna())
+        ),
+        "pressure_calibration;": (
+            (df["deltaT_label"] == 0) &
+            (df["pressure_corr_mpa"].between(0, 10)) &
+            (df["point_type"] != "zero_end") &
+            (df["pair_id"].notna())
+        ),
+        "joint_regression;": (
+            (df["pressure_corr_mpa"].between(0, 10)) &
+            (df["pair_id"].notna())
+        ),
+        "repeatability_test;": (
+            df["point_type"] == "zero_end"
+        )
+    }
+
+    df["role"] = "EDA;"
+
+    for label, mask in conditions.items():
+        df.loc[mask, "role"] += label
+
     return df
 
 
