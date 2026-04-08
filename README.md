@@ -18,7 +18,10 @@
    pip install -r requirements.txt
    ```
 4. Create folders: Output_files and PAKA_AI with data
-5. Run jupyterlab (*optional)
+
+5. Run main.py script for creating inventory.csv and global_db.csv 
+
+6. Run jupyterlab (*optional)
    ```
    python -m jupyterlab
    ```
