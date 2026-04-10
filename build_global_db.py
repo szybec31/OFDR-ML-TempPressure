@@ -1,44 +1,5 @@
-from pathlib import Path
 import pandas as pd
 from tqdm import tqdm
-
-
-def read_measurement_file(file_path):
-    """
-    Wczytuje plik .txt i zwraca DataFrame z kolumnami:
-    length, value
-    """
-    data_started = False
-    rows = []
-
-    with open(file_path, "r") as f:
-        for line in f:
-            line = line.strip()
-
-            # Szukamy początku tabeli
-            if line.startswith("Length"):
-                data_started = True
-                continue
-
-            if not data_started:
-                continue
-
-            if not line:
-                continue
-
-            parts = line.split()
-            if len(parts) < 2:
-                continue
-
-            try:
-                length = float(parts[0])
-                value = float(parts[1])
-                rows.append((length, value))
-            except ValueError:
-                continue
-
-    return pd.DataFrame(rows, columns=["length", "value"])
-
 
 def build_training_dataset(df):
     """

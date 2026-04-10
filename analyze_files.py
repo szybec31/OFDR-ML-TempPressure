@@ -1,13 +1,8 @@
 import numpy as np
 import pandas as pd
 from build_df import build_dataframe
-from build_global_db import read_measurement_file
+from utils import read_measurement_file, compute_mean_roi_from_file
 from tqdm import tqdm
-
-
-def compute_mean_roi_from_file(df, roi_min=7.0, roi_max=12):
-    roi = df[(df["length"] >= roi_min) & (df["length"] <= roi_max)]
-    return roi["value"].mean()
 
 def build_folder_summary(df_meta):
 
