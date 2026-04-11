@@ -1,7 +1,8 @@
 import pandas as pd
 from tqdm import tqdm
+from utils import read_measurement_file
 
-def build_training_dataset(df):
+def build_stupid_dataset(df):
     """
     Tworzy dataset do ML:
     length, y_value, y_ref_value, dT, Tp, pcm, role, x_value, x_ref_value

@@ -49,8 +49,14 @@ def build_folder_summary(df_meta):
             records.append({
                 "folder": row["temp_folder_label"],
                 "pressure": row["pressure_corr_mpa"],
+                "dT": row["deltaT_label"],
+                "Tp": row["T_plate_label"],
                 "y_signal": y_mean - y_ref_mean,
-                "x_signal": x_mean - x_ref_mean
+                "x_signal": x_mean - x_ref_mean,
+                "role": row["role"],
+                "path_y": row["source_path"],
+                "path_x": row["pair_id"],
+                "ref": row["reference_zero_id"]
             })
 
         except Exception as e:
@@ -105,10 +111,12 @@ def detect_channel_swap(df_summary):
 # GŁÓWNA ANALIZA
 # ======================
 
-df_meta = build_dataframe()
+if __name__ == "__main__":
+    
+    df_meta = build_dataframe()
 
-df_summary = build_folder_summary(df_meta)
+    df_summary = build_folder_summary(df_meta)
 
-df_result = detect_channel_swap(df_summary)
+    df_result = detect_channel_swap(df_summary)
 
-print(df_result)
+    print(df_result)
