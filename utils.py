@@ -2,8 +2,9 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 
-ROI_MIN = 7.2
-ROI_MAX = 12.7
+ROI_MIN = 8.5
+ROI_MAX = 12
+TRESHOLD = 0.9
 
 def fix_dt16_folder_structure(root_dir="PAKA_AI"):
     root = Path(root_dir)
@@ -131,7 +132,7 @@ def clean_roi(signal, roi_min=ROI_MIN, roi_max=ROI_MAX):
 
     clean = roi[mask]
 
-    quality = len(clean) >= 0.9 * original_len
+    quality = len(clean) >= TRESHOLD * original_len
 
     return clean, quality, len(clean)/original_len
 
@@ -151,4 +152,40 @@ def compute_signal_delta(y_df, y_ref_df):
     delta = y_vals - y_ref_vals
 
     return np.mean(delta), (q1 and q2), l1, l2
+
+def quality_report(df, threshold = 0.9):
+
+    # 🔥 przelicz low_quality na podstawie threshold
+    low_quality_recomputed = (
+        (df["x_quality"] <= threshold) |
+        (df["x_quality_ref"] <= threshold) |
+        (df["y_quality"] <= threshold) |
+        (df["y_quality_ref"] <= threshold)
+    )
+
+    report = {
+        "total": len(df),
+
+        # stare vs nowe
+        "low_quality_original": df["low_quality"].sum(),
+        "low_quality_recomputed": low_quality_recomputed.sum(),
+
+        # pojedyncze warunki
+        "x_good": (df["x_quality"] > threshold).sum(),
+        "x_ref_good": (df["x_quality_ref"] > threshold).sum(),
+        "y_good": (df["y_quality"] > threshold).sum(),
+        "y_ref_good": (df["y_quality_ref"] > threshold).sum(),
+    }
+
+    # 🔥 wszystkie warunki jednocześnie
+    all_good_mask = (
+        (df["x_quality"] > threshold) &
+        (df["x_quality_ref"] > threshold) &
+        (df["y_quality"] > threshold) &
+        (df["y_quality_ref"] > threshold)
+    )
+
+    report["all_good"] = all_good_mask.sum()
+
+    return pd.Series(report)
 
