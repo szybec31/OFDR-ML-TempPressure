@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from build_df import build_dataframe
-from utils import read_measurement_file, compute_mean_roi_from_file
+from utils import read_measurement_file, compute_signal_delta
 from tqdm import tqdm
 
 def build_folder_summary(df_meta):
@@ -29,6 +29,9 @@ def build_folder_summary(df_meta):
         x = get_file(row["pair_id"])
         y_ref = get_file(row["reference_zero_id"])
 
+        if y is None or x is None or y_ref is None:
+            continue
+
         # X ref
         x_ref = None
         if pd.notna(row["pair_id"]):
@@ -38,25 +41,33 @@ def build_folder_summary(df_meta):
                 x_ref = get_file(x_ref_path)
             else:
                 x_ref = None
+        
+        if x_ref is None:
+            continue
 
         try:
-            y_mean = compute_mean_roi_from_file(y)
-            x_mean = compute_mean_roi_from_file(x)
+            y_signal, y_quality, yq1, yq2 = compute_signal_delta(y, y_ref)
+            x_signal, x_quality, xq1, xq2 = compute_signal_delta(x, x_ref)
 
-            y_ref_mean = compute_mean_roi_from_file(y_ref) if y_ref is not None else 0
-            x_ref_mean = compute_mean_roi_from_file(x_ref) if x_ref is not None else 0
+            if y_signal is None or x_signal is None:
+                continue
 
             records.append({
                 "folder": row["temp_folder_label"],
                 "pressure": row["pressure_corr_mpa"],
                 "dT": row["deltaT_label"],
                 "Tp": row["T_plate_label"],
-                "y_signal": y_mean - y_ref_mean,
-                "x_signal": x_mean - x_ref_mean,
+                "y_signal": y_signal,
+                "x_signal": x_signal,
                 "role": row["role"],
                 "path_y": row["source_path"],
                 "path_x": row["pair_id"],
-                "ref": row["reference_zero_id"]
+                "ref": row["reference_zero_id"],
+                "low_quality": not (y_quality and x_quality),
+                "y_quality": yq1,
+                "y_quality_ref": yq2,
+                "x_quality": xq1,
+                "x_quality_ref": xq2
             })
 
         except Exception as e:

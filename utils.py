@@ -1,6 +1,9 @@
 from pathlib import Path
-import re
 import pandas as pd
+import numpy as np
+
+ROI_MIN = 7.2
+ROI_MAX = 12.7
 
 def fix_dt16_folder_structure(root_dir="PAKA_AI"):
     root = Path(root_dir)
@@ -56,7 +59,7 @@ def fix_dt16_folder_structure(root_dir="PAKA_AI"):
 
             print(f"✔ Fixed: {dt_folder}\n")
 
-def compute_mean_roi_from_file(df, roi_min=7.0, roi_max=12):
+def compute_mean_roi_from_file(df, roi_min=ROI_MIN, roi_max=ROI_MAX):
     roi = df[(df["length"] >= roi_min) & (df["length"] <= roi_max)]
     return roi["value"].mean()
 
@@ -95,4 +98,57 @@ def read_measurement_file(file_path):
                 continue
 
     return pd.DataFrame(rows, columns=["length", "value"])
+
+def clean_roi(signal, roi_min=ROI_MIN, roi_max=ROI_MAX):
+    
+    roi = signal[(signal["length"] >= roi_min) & (signal["length"] <= roi_max)]
+
+    if len(roi) < 10:
+        return None, False
+
+    # obcięcie brzegów
+    roi = roi.iloc[2:-2]
+
+    original_len = len(roi)
+
+    # usuń NaN
+    roi = roi.dropna()
+
+    if len(roi) == 0:
+        return None, False
+
+    values = roi["value"].values
+
+    median = np.median(values)
+    mad = np.median(np.abs(values - median))
+
+    if mad == 0:
+        return roi, False
+
+    z = 0.6745 * (values - median) / mad
+
+    mask = np.abs(z) <= 3.5
+
+    clean = roi[mask]
+
+    quality = len(clean) >= 0.9 * original_len
+
+    return clean, quality, len(clean)/original_len
+
+def compute_signal_delta(y_df, y_ref_df):
+
+    y_clean, q1, l1 = clean_roi(y_df)
+    y_ref_clean, q2, l2 = clean_roi(y_ref_df)
+
+    if y_clean is None or y_ref_clean is None:
+        return None, False
+
+    min_len = min(len(y_clean), len(y_ref_clean))
+
+    y_vals = y_clean["value"].values[:min_len]
+    y_ref_vals = y_ref_clean["value"].values[:min_len]
+
+    delta = y_vals - y_ref_vals
+
+    return np.mean(delta), (q1 and q2), l1, l2
 

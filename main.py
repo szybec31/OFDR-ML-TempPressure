@@ -18,7 +18,7 @@ if __name__ == "__main__":
 
     df_summary = build_folder_summary(df)
 
-    df_summary[df_summary["ref"].notna()][["pressure", "dT", "Tp", "y_signal", "x_signal", "role"]].to_csv(os.path.join(output_dir, 'training_dataset.csv'), index=False)
+    df_summary[df_summary["ref"].notna()][["pressure", "dT", "Tp", "y_signal", "x_signal", "role", "low_quality"]].to_csv(os.path.join(output_dir, 'training_dataset.csv'), index=False)
 
     exit()
 
