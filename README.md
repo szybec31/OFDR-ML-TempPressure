@@ -25,4 +25,41 @@
    ```
    python -m jupyterlab
    ```
+
+## Project files description:
+
+Python files:
+- `analyze_files.py` 
+  - builds physical signals ΔX and ΔY 
+  - checks how they change with pressure 
+  - detects whether the channels behave in a physically correct way
+- `build_df.py`
+  - loads and extracts data from the directory structure  
+  - based on this data and instructions, builds inventory.csv
+- `utils.py`
+  - fixes incorrect data structure (DT16)
+  - loads raw OFDR files 
+  - extracts and cleans ROI 
+  - computes the physical signal: ΔShift (i.e., the effect of pressure/temperature)
+- `main.py` - wdrożenie wszystkich funkcji razem 
+  - fixes directory structure and naming 
+  - initializes the creation of inventory.csv 
+  - determines ROI and cleans points within ROI 
+  - aggregates data to the sample level 
+  - creates the dataset for ML analysis paired_features.csv
+- `physical_model.py` - implementation of the physical model from the paper
+
+Notebooks:
+- `DisplayDF.ipynb` - displays the inventory table
+- `analyze.ipynb` - displays the paired_features table
+
+Directories:
+- `PAKA_AI` - folder and file structure with measurement data
+- `Output_files` - processed data files
+- `other_output` - channel and pressure mapping files
+
+Other:
+- `requirements.txt` - contains required libraries
+- `.gitignore` - prevents selected data from being uploaded to GitHub
+
 ## Authors:

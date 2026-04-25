@@ -155,7 +155,7 @@ def compute_signal_delta(y_df, y_ref_df):
 
 def quality_report(df, threshold = 0.9):
 
-    # 🔥 przelicz low_quality na podstawie threshold
+    # przelicz low_quality na podstawie threshold
     low_quality_recomputed = (
         (df["x_quality"] <= threshold) |
         (df["x_quality_ref"] <= threshold) |
@@ -177,7 +177,7 @@ def quality_report(df, threshold = 0.9):
         "y_ref_good": (df["y_quality_ref"] > threshold).sum(),
     }
 
-    # 🔥 wszystkie warunki jednocześnie
+    # wszystkie warunki jednocześnie
     all_good_mask = (
         (df["x_quality"] > threshold) &
         (df["x_quality_ref"] > threshold) &
