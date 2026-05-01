@@ -18,10 +18,13 @@ if __name__ == "__main__":
 
     df_summary = build_folder_summary(df)
 
-    df_base_for_training = df_summary[df_summary["ref"].notna()][["pressure", "dT", "Tp", "y_signal", "x_signal", "role", "low_quality", "x_quality", "x_quality_ref", "y_quality", "y_quality_ref"]]
-    df_base_for_training.to_csv(os.path.join(output_dir, 'training_dataset.csv'), index=False)
+    df_summary = df_summary[df_summary["ref"].notna()]
+    df_summary.to_csv(os.path.join(output_dir, 'training_dataset.csv'), index=False)
 
-    print(quality_report(df_base_for_training, 0.9))
+    df_base_for_training = df_summary[["pressure", "dT", "Tp", "mu_Y", "mu_X", "std_Y", "std_X", "irq_Y", "irq_X", "role", "low_quality"]]
+    df_base_for_training.to_csv(os.path.join(output_dir, 'paired_features.csv'), index=False)
+
+    print(quality_report(df_summary, 0.9))
 
     exit()
 

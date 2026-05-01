@@ -52,13 +52,22 @@ def build_folder_summary(df_meta):
             if y_signal is None or x_signal is None:
                 continue
 
+            y75, y25 = np.percentile(y_signal, [75, 25])
+            x75, x25 = np.percentile(x_signal, [75, 25])
+            irq_Y = y75 - y25
+            irq_X = x75 - x25
+
             records.append({
                 "folder": row["temp_folder_label"],
                 "pressure": row["pressure_corr_mpa"],
                 "dT": row["deltaT_label"],
                 "Tp": row["T_plate_label"],
-                "y_signal": y_signal,
-                "x_signal": x_signal,
+                "mu_Y": np.mean(y_signal),
+                "mu_X": np.mean(x_signal),
+                "std_Y": np.std(y_signal),
+                "std_X": np.std(x_signal),
+                "irq_Y": irq_Y,
+                "irq_X": irq_X,
                 "role": row["role"],
                 "path_y": row["source_path"],
                 "path_x": row["pair_id"],
@@ -73,7 +82,11 @@ def build_folder_summary(df_meta):
         except Exception as e:
             print("Error:", e)
 
-    return pd.DataFrame(records)
+        df = pd.DataFrame(records)
+        df["diff_XY"] = df["mu_X"] - df["mu_Y"]
+        df["mean_XY"] = (df["mu_X"] + df["mu_Y"]) / 2
+
+    return df
 
 def detect_channel_swap(df_summary):
 
@@ -89,8 +102,8 @@ def detect_channel_swap(df_summary):
             continue
 
         try:
-            slope_y = np.polyfit(df_f["pressure"], df_f["y_signal"], 1)[0]
-            slope_x = np.polyfit(df_f["pressure"], df_f["x_signal"], 1)[0]
+            slope_y = np.polyfit(df_f["pressure"], df_f["mu_Y"], 1)[0]
+            slope_x = np.polyfit(df_f["pressure"], df_f["mu_X"], 1)[0]
 
             folder_results.append({
                 "folder": folder,
