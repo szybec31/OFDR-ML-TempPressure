@@ -9,7 +9,7 @@ def build_stupid_dataset(df):
     """
 
     records = []
-    file_cache = {}  # 🔥 cache
+    file_cache = {}  # cache
 
     def get_file(path):
         if path is None or pd.isna(path):
