@@ -42,17 +42,18 @@ if __name__ == "__main__":
         output_dir = 'Output_files'
         df = pd.read_csv(os.path.join(output_dir, 'paired_features.csv'))
 
-        y = df["pressure"] # "dT, Tp"
+        y = df[["pressure", "dT"]] # "dT, Tp"
         X = df.drop(columns = ["pressure", "dT", "Tp"])
 
-        
-        avg_results, std_results = run_cv(X, y, 5, models = ["linear"], df_value = ["mu_Y", "mu_X"])
+        # ["MO-LR", "RF", "POLY2-RIDGE", "SVR-RBF", "AN-BL", "MLP"]
+        models = ["MO-LR", "RF", "POLY2-RIDGE", "SVR-RBF"]
+        avg_results, std_results = run_cv(X, y, 5, models = models, df_value = ["mu_Y", "mu_X"])
 
         print("\n===== CROSS VALIDATION RESULTS =====\n")
 
         for i, (avg, std) in enumerate(zip(avg_results, std_results)):
-
-            print(f"Model {i+1}")
+            print("-" * 30)
+            print(f"Model {models[i]}")
             print("-" * 30)
 
             for metric in avg.keys():
@@ -61,5 +62,3 @@ if __name__ == "__main__":
                     f"{avg[metric]:.6f} "
                     f"± {std[metric]:.6f}"
                 )
-
-            print()

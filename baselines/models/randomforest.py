@@ -1,18 +1,16 @@
-# models/randomforest.py
-from sklearn.multiclass import OneVsRestClassifier
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestRegressor
 
-def train_random_forest(X_train, y_train, balanced=True, **config):
-    base_model = RandomForestClassifier(
-        n_estimators = config["n_estimators"] if "n_estimators" in config else 200,
-        max_depth = config["max_depth"] if "max_depth" in config else 20,
-        max_features = config["max_features_rf"] if "max_features_rf" in config else 'sqrt',
+def train_random_forest(X_train, y_train, config):
+
+    model = RandomForestRegressor(
+        n_estimators=config.get("n_estimators", 300),
+        max_depth=config.get("max_depth", None),
+        min_samples_leaf=config.get("min_samples_leaf", 1),
+        max_features=config.get("max_features", "sqrt"),
         n_jobs=-1,
-        random_state=42,
-        class_weight='balanced' if balanced else None
+        random_state=42
     )
 
-    model = OneVsRestClassifier(base_model)
-
     model.fit(X_train, y_train)
+
     return model

@@ -7,17 +7,9 @@ def run_experiment(df, y, split, **config):
 	# ========================
 	# model: str = "logistic" or "svm" or "random_forest" or "mlp"
 	# models: list = up to 2 models from list above (only for "late-fusion")
-	# balanced: bool = True or False
-	# balanced_list: list[bool] = list of using balanced params in models (only for "late-fusion")
-	# threshold: float = 0.2, 0.3, 0.5 (only for tfidf vectorizer), base value = 0.5 for tfidf or None (for other vect)
-	# thresholds: list[float] = list of thresholds for late-fusion when using min one model based on tfidf vectorizer
 	# n_estimators: int = base 200, for random_forest
     # max_depth: int = base 20, for random_forest
 	# max_features_rf: str = base 'sqrt', for random_forest
-	# hidden_layer_sizes: tuple = base (256, 128), for mlp
-    # max_iter: int = base 20, for mlp
-    # batch_size: int = base 64, for mlp
-    # learning_rate_init: float = base 0.001, for mlp
 	# ========================
 
 
@@ -29,18 +21,6 @@ def run_experiment(df, y, split, **config):
 			raise ValueError("Choose model")
 		config["models"] = [config["model"]]
 	
-	if "thresholds" not in config:
-		config["thresholds"] = []
-		if "threshold" in config:
-			config["thresholds"] = [config["threshold"]]
-		else:
-			config["thresholds"] = [None, None]
-			
-	if "balanced_list" not in config:
-		if "balanced" in config:
-			config["balanced_list"] = [config["balanced"]]
-		else:
-			config["balanced_list"] = [False, False]
 
 	## LISTS:
 	X = df[config["df_value"]]
@@ -53,51 +33,46 @@ def run_experiment(df, y, split, **config):
 	X_train = X.iloc[train_idx]
 	X_test  = X.iloc[test_idx]
 
-	y_train = y[train_idx]
-	y_test  = y[test_idx]
+	y_train = y.iloc[train_idx]
+	y_test  = y.iloc[test_idx]
 
     # ========================
-    # MODELS AND PREDICTIONS
+    # MODELS
     # ========================
-	
-	preds = []
 	evaluations = []
-	info = []
 
-	for i, model_name in enumerate(config["models"]):
+	for model_name in config["models"]:
+
 		print(f"Model: {model_name}")
 
-		Xtr = X_train
-		Xte = X_test
-
-		if model_name == "linear":
+		if model_name == "MO-LR":
 			from .models.linear import train_linear
-			model = train_linear(Xtr, y_train)
-			y_pred = model.predict(Xte)
+			model = train_linear(X_train, y_train)
 
-		elif model_name == "svm":
-			from .models.svm import train_svm
-			model = train_svm(Xtr, y_train, config["balanced_list"][i], **clean_model_config(config, ["balanced"]))
-			y_pred = model.predict(Xte)
+		elif model_name == "POLY2-RIDGE":
+			from .models.poly2_ridge import train_poly2_ridge
+			model = train_poly2_ridge(X_train, y_train, config)
 
-		elif model_name == "random_forest":
+		elif model_name == "SVR-RBF":
+			from .models.svr_rbf import train_svr_rbf
+			model = train_svr_rbf(X_train, y_train, config)
+
+		elif model_name == "RF":
 			from .models.randomforest import train_random_forest
-			print(f"Balanced: {config["balanced_list"][i]}")
-			model = train_random_forest(Xtr, y_train, balanced=config["balanced_list"][i], **clean_model_config(config, ["balanced"]))
-			y_pred = model.predict(Xte)
-			y_proba = model.predict_proba(Xte)
+			model = train_random_forest(X_train, y_train, config)
 
-		elif model_name == "mlp":
-			from .models.mlp import train_mlp
-			model = train_mlp(Xtr, y_train, **config)
-			y_pred = model.predict(Xte)
-			y_proba = model.predict_proba(Xte)
+		# elif model_name == "AN-BL":
+		# 	from .models.physical_model import AnalyticalBaseline
+		# 	model = AnalyticalBaseline()
+		# 	model.fit(X_train, y_train)
 
 		else:
 			raise ValueError("Unknown model")
-		
-		info.append(f"Model: {model_name}")
-		evaluations.append(evaluate(y_test, y_pred))
-		preds.append(y_pred)
+
+		y_pred = model.predict(X_test)
+
+		evaluations.append(
+			evaluate(y_test, y_pred)
+        )
 
 	return evaluations
