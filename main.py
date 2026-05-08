@@ -4,30 +4,62 @@ import pandas as pd
 import os
 from utils import fix_dt16_folder_structure, quality_report
 from analyze_files import build_folder_summary
+from baselines.run_cv import run_cv
+
 
 if __name__ == "__main__":
 
-    fix_dt16_folder_structure()
+    type = "run" # "prepare"
 
-    df = build_dataframe()
+    if type == "prepare":
 
-    output_dir = 'Output_files'
-    os.makedirs(output_dir, exist_ok=True)  # create folder if it doesn't exist
+        fix_dt16_folder_structure()
 
-    df.to_csv(os.path.join(output_dir, 'inventory.csv'), index=False)
+        df = build_dataframe()
 
-    df_summary = build_folder_summary(df)
+        output_dir = 'Output_files'
+        os.makedirs(output_dir, exist_ok=True)  # create folder if it doesn't exist
 
-    df_summary = df_summary[df_summary["ref"].notna()]
-    df_summary.to_csv(os.path.join(output_dir, 'training_dataset.csv'), index=False)
+        df.to_csv(os.path.join(output_dir, 'inventory.csv'), index=False)
 
-    df_base_for_training = df_summary[["pressure", "dT", "Tp", "mu_Y", "mu_X", "std_Y", "std_X", "irq_Y", "irq_X", "role", "low_quality"]]
-    df_base_for_training.to_csv(os.path.join(output_dir, 'paired_features.csv'), index=False)
+        df_summary = build_folder_summary(df)
 
-    print(quality_report(df_summary, 0.9))
+        df_summary = df_summary[df_summary["ref"].notna()]
+        df_summary.to_csv(os.path.join(output_dir, 'training_dataset.csv'), index=False)
 
-    exit()
+        df_base_for_training = df_summary[["pressure", "dT", "Tp", "mu_Y", "mu_X", "std_Y", "std_X", "irq_Y", "irq_X", "role", "low_quality"]]
+        df_base_for_training.to_csv(os.path.join(output_dir, 'paired_features.csv'), index=False)
 
-    df_train = build_stupid_dataset(df)
+        print(quality_report(df_summary, 0.9))
 
-    df_train.to_csv("Output_files/stupid_dataset.csv", index=False)
+        exit()
+
+        df_train = build_stupid_dataset(df)
+
+        df_train.to_csv("Output_files/stupid_dataset.csv", index=False)
+
+    elif type == "run":
+        output_dir = 'Output_files'
+        df = pd.read_csv(os.path.join(output_dir, 'paired_features.csv'))
+
+        y = df["pressure"] # "dT, Tp"
+        X = df.drop(columns = ["pressure", "dT", "Tp"])
+
+        
+        avg_results, std_results = run_cv(X, y, 5, models = ["linear"], df_value = ["mu_Y", "mu_X"])
+
+        print("\n===== CROSS VALIDATION RESULTS =====\n")
+
+        for i, (avg, std) in enumerate(zip(avg_results, std_results)):
+
+            print(f"Model {i+1}")
+            print("-" * 30)
+
+            for metric in avg.keys():
+                print(
+                    f"{metric.upper():<6} "
+                    f"{avg[metric]:.6f} "
+                    f"± {std[metric]:.6f}"
+                )
+
+            print()
