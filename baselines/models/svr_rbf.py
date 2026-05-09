@@ -3,8 +3,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.multioutput import MultiOutputRegressor
 from sklearn.svm import SVR
 
-def train_svr_rbf(X_train, y_train, config):
-
+def train_svr_rbf(X_train, y_train, config, return_pipeline=False):
     base_model = SVR(
         kernel="rbf",
         C=config.get("C", 10),
@@ -17,6 +16,10 @@ def train_svr_rbf(X_train, y_train, config):
         ("svr", MultiOutputRegressor(base_model))
     ])
 
-    model.fit(X_train, y_train)
+    if return_pipeline:
+        return model
 
+    model.fit(X_train, y_train)
     return model
+
+

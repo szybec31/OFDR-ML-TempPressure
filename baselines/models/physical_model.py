@@ -1,5 +1,7 @@
 import numpy as np
+import pandas as pd
 from sklearn.linear_model import LinearRegression
+from sklearn.base import BaseEstimator, RegressorMixin
 
 # calculate_A_B -> zbiór treningowy w foldzie gdzie
 # calculate_C -> zbiór treningowy w foldzie
@@ -89,3 +91,52 @@ class PhysicalModel():
         p = (mu_X - self.Ax*T**2 - self.Bx*T) / self.Cx
 
         return T, p
+
+    def fit(self, X, y):
+        # Zakładamy: X ma kolumny [mu_Y, mu_X], y ma [pressure, dT]
+        # Tworzymy tymczasowy DataFrame dla łatwego filtrowania
+        data = pd.DataFrame({
+            'mu_Y': X.iloc[:, 0], 'mu_X': X.iloc[:, 1],
+            'pressure': y.iloc[:, 0], 'dT': y.iloc[:, 1]
+        })
+
+        # 1. Kalibracja Temperatury (A, B): bierzemy punkty gdzie ciśnienie ≈ 0
+        df_temp = data[np.abs(data["pressure"]) == np.min(np.abs(data["pressure"]))]
+        T = df_temp["dT"].values
+        X_poly = np.column_stack([T ** 2, T])
+
+        self.Ax, self.Bx = LinearRegression().fit(X_poly, df_temp["mu_X"]).coef_
+        self.Ay, self.By = LinearRegression().fit(X_poly, df_temp["mu_Y"]).coef_
+
+        # 2. Kalibracja Ciśnienia (C): bierzemy punkty gdzie zmiana temperatury ≈ 0
+        df_press = data[np.abs(data["dT"]) == np.min(np.abs(data["dT"]))]
+        P = df_press["pressure"].values.reshape(-1, 1)
+
+        self.Cx = LinearRegression().fit(P, df_press["mu_X"]).coef_[0]
+        self.Cy = LinearRegression().fit(P, df_press["mu_Y"]).coef_[0]
+
+        return self
+
+    def predict(self, X):
+        results = []
+        for _, row in X.iterrows():
+            mu_y, mu_x = row.iloc[0], row.iloc[1]
+
+            # Układ równań kwadratowych dla dT
+            a_coeff = (self.Ay / self.Cy) - (self.Ax / self.Cx)
+            b_coeff = (self.By / self.Cy) - (self.Bx / self.Cx)
+            c_coeff = (mu_y / self.Cy) - (mu_x / self.Cx)
+
+            delta = b_coeff ** 2 - 4 * a_coeff * c_coeff
+            if delta < 0:
+                dT = -b_coeff / (2 * a_coeff)  # Przybliżenie jeśli brak pierwiastków
+            else:
+                t1 = (-b_coeff + np.sqrt(delta)) / (2 * a_coeff)
+                t2 = (-b_coeff - np.sqrt(delta)) / (2 * a_coeff)
+                dT = t1 if abs(t1) < abs(t2) else t2
+
+            # Wyznaczenie ciśnienia p
+            p = (mu_x - self.Ax * dT ** 2 - self.Bx * dT) / self.Cx
+            results.append([p, dT])
+
+        return np.array(results)

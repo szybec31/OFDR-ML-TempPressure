@@ -4,8 +4,8 @@ from build_df import build_dataframe
 from utils import read_measurement_file, compute_signal_delta
 from tqdm import tqdm
 
-def build_folder_summary(df_meta):
 
+def build_folder_summary(df_meta):
     records = []
     file_cache = {}
 
@@ -16,8 +16,8 @@ def build_folder_summary(df_meta):
             file_cache[path] = read_measurement_file(path)
         return file_cache[path]
 
+    # Interesują nas pary, bazujemy na kanale Y jako głównym
     df_y = df_meta[df_meta["channel_norm"] == "Y"]
-
     meta_map = df_meta.set_index("source_path")
 
     for _, row in tqdm(df_y.iterrows(), total=len(df_y), desc="Building summary"):
@@ -32,16 +32,13 @@ def build_folder_summary(df_meta):
         if y is None or x is None or y_ref is None:
             continue
 
-        # X ref
+        # Pobranie referencji dla kanału X
         x_ref = None
-        if pd.notna(row["pair_id"]):
-            row2 = meta_map.loc[row["pair_id"]]
-            x_ref_path = row2["reference_zero_id"]
-            if pd.notna(x_ref_path):
-                x_ref = get_file(x_ref_path)
-            else:
-                x_ref = None
-        
+        row2 = meta_map.loc[row["pair_id"]]
+        x_ref_path = row2["reference_zero_id"]
+        if pd.notna(x_ref_path):
+            x_ref = get_file(x_ref_path)
+
         if x_ref is None:
             continue
 
@@ -52,6 +49,7 @@ def build_folder_summary(df_meta):
             if y_signal is None or x_signal is None:
                 continue
 
+            # Obliczanie IRQ
             y75, y25 = np.percentile(y_signal, [75, 25])
             x75, x25 = np.percentile(x_signal, [75, 25])
             irq_Y = y75 - y25
@@ -62,6 +60,7 @@ def build_folder_summary(df_meta):
                 "pressure": row["pressure_corr_mpa"],
                 "dT": row["deltaT_label"],
                 "Tp": row["T_plate_label"],
+                "series_id": row["series_id"],
                 "mu_Y": np.mean(y_signal),
                 "mu_X": np.mean(x_signal),
                 "std_Y": np.std(y_signal),
@@ -76,13 +75,25 @@ def build_folder_summary(df_meta):
                 "y_quality": yq1,
                 "y_quality_ref": yq2,
                 "x_quality": xq1,
-                "x_quality_ref": xq2
+                "x_quality_ref": xq2,
+                "max_X": np.max(x_signal),
+                "max_Y": np.max(y_signal),
+
+                "min_X": np.min(x_signal),
+                "min_Y": np.min(y_signal),
+
+                "median_X": np.median(x_signal),
+                "median_Y": np.median(y_signal),
+
+                "range_X": np.max(x_signal) - np.min(x_signal),
+                "range_Y": np.max(y_signal) - np.min(y_signal),
             })
 
         except Exception as e:
-            print("Error:", e)
+            print(f"Error processing {row['source_path']}: {e}")
 
-        df = pd.DataFrame(records)
+    df = pd.DataFrame(records)
+    if not df.empty:
         df["diff_XY"] = df["mu_X"] - df["mu_Y"]
         df["mean_XY"] = (df["mu_X"] + df["mu_Y"]) / 2
 

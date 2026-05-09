@@ -1,7 +1,6 @@
 from sklearn.ensemble import RandomForestRegressor
 
-def train_random_forest(X_train, y_train, config):
-
+def train_random_forest(X_train, y_train, config, return_base=False):
     model = RandomForestRegressor(
         n_estimators=config.get("n_estimators", 300),
         max_depth=config.get("max_depth", None),
@@ -11,6 +10,10 @@ def train_random_forest(X_train, y_train, config):
         random_state=42
     )
 
-    model.fit(X_train, y_train)
+    if return_base:
+        return model
 
+    model.fit(X_train, y_train)
     return model
+
+
