@@ -9,7 +9,7 @@ from baselines.run_cv import run_cv
 
 if __name__ == "__main__":
 
-    type = "info" # "prepare"
+    type = "run" # "prepare"
 
     if type == "prepare":
 

@@ -151,7 +151,8 @@ def compute_signal_delta(y_df, y_ref_df):
 
     delta = y_vals - y_ref_vals
 
-    return delta, (q1 and q2), l1, l2
+    # return delta, (q1 and q2), l1, l2
+    return y_clean["value"].values, q1, l1, l2
 
 def quality_report(df, threshold = 0.9):
 
