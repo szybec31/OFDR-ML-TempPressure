@@ -9,7 +9,7 @@ from baselines.run_cv import run_cv
 
 if __name__ == "__main__":
 
-    type = "run" # "prepare"
+    type = "info" # "prepare"
 
     if type == "prepare":
 
@@ -27,7 +27,7 @@ if __name__ == "__main__":
         df_summary = df_summary[df_summary["ref"].notna()]
         df_summary.to_csv(os.path.join(output_dir, 'training_dataset.csv'), index=False)
 
-        df_base_for_training = df_summary[["pressure", "dT", "Tp", "mu_Y", "mu_X", "std_Y", "std_X", "irq_Y", "irq_X", "role", "low_quality"]]
+        df_base_for_training = df_summary[["pressure", "dT", "Tp", "mu_Y", "mu_X", "std_Y", "std_X", "irq_Y", "irq_X", "is_temp_calibration", "is_pressure_calibration", "is_joint_regression", "is_repeatability_test", "low_quality"]]
         df_base_for_training.to_csv(os.path.join(output_dir, 'paired_features.csv'), index=False)
 
         print(quality_report(df_summary, 0.9))
@@ -62,3 +62,17 @@ if __name__ == "__main__":
                     f"{avg[metric]:.6f} "
                     f"± {std[metric]:.6f}"
                 )
+
+    elif type == "info":
+        output_dir = 'Output_files'
+        df = pd.read_csv(os.path.join(output_dir, 'paired_features.csv'))
+
+        print(f"is_temp_calibration: {df["is_temp_calibration"].sum()}")
+        print(f"is_pressure_calibration: {df["is_pressure_calibration"].sum()}")
+        print(f"is_joint_regression: {df["is_joint_regression"].sum()}")
+        print(f"is_repeatability_test: {df["is_repeatability_test"].sum()}")
+
+        print("---------- Info ----------")
+        print(df.info())
+        
+        print(f"pressure: {df["pressure"].unique()}")
