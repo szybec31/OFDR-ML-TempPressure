@@ -68,7 +68,11 @@ def build_folder_summary(df_meta):
                 "std_X": np.std(x_signal),
                 "irq_Y": irq_Y,
                 "irq_X": irq_X,
-                "role": row["role"],
+                #"role": row["role"],
+                "is_temp_calibration": row["is_temp_calibration"],
+                "is_pressure_calibration": row["is_pressure_calibration"],
+                "is_joint_regression": row["is_joint_regression"],
+                "is_repeatability_test": row["is_repeatability_test"],
                 "path_y": row["source_path"],
                 "path_x": row["pair_id"],
                 "ref": row["reference_zero_id"],
@@ -82,9 +86,9 @@ def build_folder_summary(df_meta):
         except Exception as e:
             print("Error:", e)
 
-        df = pd.DataFrame(records)
-        df["diff_XY"] = df["mu_X"] - df["mu_Y"]
-        df["mean_XY"] = (df["mu_X"] + df["mu_Y"]) / 2
+    df = pd.DataFrame(records)
+    df["diff_XY"] = df["mu_X"] - df["mu_Y"]
+    df["mean_XY"] = (df["mu_X"] + df["mu_Y"]) / 2
 
     return df
 
