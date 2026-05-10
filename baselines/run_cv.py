@@ -1,55 +1,89 @@
-from .run_experiment import run_experiment
-from sklearn.model_selection import StratifiedKFold, KFold
 import numpy as np
+import pandas as pd
+from sklearn.model_selection import LeaveOneGroupOut
+from .run_experiment import run_experiment
+from .utils.metrics import evaluate
 
-def run_cv(df, y, n_splits=5, **config):
-    # ALL DESCRIPTIONS IN run_experiment.py
 
-    X = df # nie ma znaczenia kolumna, gdyz StratifiedKFold.split zwraca i tak tylko id's
+def run_cv(df, y, models, df_value, groups):
+    logo = LeaveOneGroupOut()
+    all_fold_results = {m: [] for m in models}
+    all_y_true = []
+    all_y_preds = {m: [] for m in models}
 
-    skf = KFold(
-        n_splits=n_splits,
-        shuffle=True,
-        random_state=42
-    )
+    flags = ["is_temp_calibration", "is_pressure_calibration", "is_joint_regression"]
+    X_full = df[df_value + flags + ["series_id"]]
 
-    all_results = []
+    for fold, (train_idx, test_idx) in enumerate(logo.split(X_full, y, groups=groups)):
+        test_temp = groups.iloc[test_idx].unique()[0]
+        print(f"\n>>> FOLD {fold + 1}: Test na Tp = {test_temp}C")
 
-    for fold, (train_idx, test_idx) in enumerate(skf.split(X)):
-        print(f"Fold {fold+1}/{n_splits}")
+        X_train_fold = X_full.iloc[train_idx]
+        y_train_fold = y.iloc[train_idx]
+        X_test_fold = X_full.iloc[test_idx]
+        y_test_fold = y.iloc[test_idx]
 
-        results_list = run_experiment(
-            df,
-            y,
-            split=(train_idx, test_idx),
-            **config
+        joint_mask = X_test_fold["is_joint_regression"] == True
+        if not np.any(joint_mask):
+            print(f"  Pominięto fold - brak danych joint_regression")
+            continue
+
+        X_test_filtered = X_test_fold[joint_mask]
+        y_test_filtered = y_test_fold[joint_mask]
+
+        res_list, pred_list = run_experiment(
+            X_train=X_train_fold,
+            y_train=y_train_fold,
+            X_test=X_test_filtered,
+            y_test=y_test_filtered,
+            models=models
         )
 
-        all_results.append(results_list)
+        all_y_true.append(y_test_filtered.values)
+        for i, m_name in enumerate(models):
+            all_fold_results[m_name].append(res_list[i])
+            all_y_preds[m_name].append(pred_list[i])
 
-    # ========================
-    # AGREGACJA PER MODEL
-    # ========================
+    final_avg = []
+    final_std = []
 
-    n_models = len(all_results[0])  # np. 3 (model1, model2, fusion)
+    if not all_y_true:
+        print("Błąd: Nie zebrano żadnych wyników!")
+        return [], []
 
-    avg_all = []
-    std_all = []
+    y_true_stacked = np.vstack(all_y_true)
+    y_true_df = pd.DataFrame(y_true_stacked, columns=["pressure", "dT"])
 
-    for m in range(n_models):
-        model_results = [fold[m] for fold in all_results]
+    for m_name in models:
+        m_folds = all_fold_results[m_name]
 
-        avg = {
-            key: np.mean([r[key] for r in model_results])
-            for key in model_results[0]
-        }
+        avg = {k: np.nanmean([f[k] for f in m_folds]) for k in m_folds[0]}
+        std = {k: np.nanstd([f[k] for f in m_folds]) for k in m_folds[0]}
 
-        std = {
-            key: np.std([r[key] for r in model_results])
-            for key in model_results[0]
-        }
+        m_preds_stacked = np.vstack(all_y_preds[m_name])
+        global_metrics = evaluate(y_true_df, m_preds_stacked)
 
-        avg_all.append(avg)
-        std_all.append(std)
+        avg["dT_r2"] = global_metrics["dT_r2"]
+        avg["pressure_r2"] = global_metrics["pressure_r2"]
+        std["dT_r2"] = 0.0
 
-    return avg_all, std_all
+        final_avg.append(avg)
+        final_std.append(std)
+
+    return final_avg, final_std
+
+
+def run_ablation_test(name, dataframe, features_list):
+    print(f"\nTest ablacji \"{name}\"")
+    y_local = dataframe[["pressure", "dT"]]
+    groups_local = dataframe["Tp"]
+
+    avg, _ = run_cv(
+        df=dataframe,
+        y=y_local,
+        models=["MO-LR"],
+        df_value=features_list,
+        groups=groups_local
+    )
+    return avg[0]
+

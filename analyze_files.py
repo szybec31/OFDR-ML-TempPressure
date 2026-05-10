@@ -80,7 +80,8 @@ def build_folder_summary(df_meta):
                 "y_quality": yq1,
                 "y_quality_ref": yq2,
                 "x_quality": xq1,
-                "x_quality_ref": xq2
+                "x_quality_ref": xq2,
+                "series_id": row["series_id"],
             })
 
         except Exception as e:
@@ -135,16 +136,11 @@ def detect_channel_swap(df_summary):
 
     return df_result
 
-# ======================
-# GŁÓWNA ANALIZA
-# ======================
 
 if __name__ == "__main__":
     
     df_meta = build_dataframe()
-
     df_summary = build_folder_summary(df_meta)
-
     df_result = detect_channel_swap(df_summary)
-
     print(df_result)
+
