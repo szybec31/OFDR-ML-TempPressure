@@ -9,7 +9,7 @@ from baselines.run_cv import run_cv
 
 if __name__ == "__main__":
 
-    type = "run" # "prepare"
+    type = "run" # "prepare", "run" lub "info"
 
     if type == "prepare":
 
@@ -27,7 +27,9 @@ if __name__ == "__main__":
         df_summary = df_summary[df_summary["ref"].notna()]
         df_summary.to_csv(os.path.join(output_dir, 'training_dataset.csv'), index=False)
 
-        df_base_for_training = df_summary[["pressure", "dT", "Tp", "mu_Y", "mu_X", "std_Y", "std_X", "irq_Y", "irq_X", "is_temp_calibration", "is_pressure_calibration", "is_joint_regression", "is_repeatability_test", "low_quality"]]
+        df_base_for_training = df_summary[["series_id", "pressure", "dT", "Tp", "mu_Y", "mu_X", "std_Y", "std_X",
+                                           "irq_Y", "irq_X", "is_temp_calibration", "is_pressure_calibration",
+                                           "is_joint_regression", "is_repeatability_test", "low_quality"]]
         df_base_for_training.to_csv(os.path.join(output_dir, 'paired_features.csv'), index=False)
 
         print(quality_report(df_summary, 0.9))
@@ -38,30 +40,31 @@ if __name__ == "__main__":
 
         df_train.to_csv("Output_files/stupid_dataset.csv", index=False)
 
+
     elif type == "run":
         output_dir = 'Output_files'
-        df = pd.read_csv(os.path.join(output_dir, 'paired_features.csv'))
+        file_path = os.path.join(output_dir, 'paired_features.csv')
 
-        y = df[["pressure", "dT"]] # "dT, Tp"
-        X = df.drop(columns = ["pressure", "dT", "Tp"])
+        df_full = pd.read_csv(file_path)
+        df = df_full[df_full["low_quality"] == False].copy()
+        y = df[["pressure", "dT"]]
+        groups = df["Tp"]
 
-        # ["MO-LR", "RF", "POLY2-RIDGE", "SVR-RBF", "AN-BL", "MLP"]
-        models = ["MO-LR", "RF", "POLY2-RIDGE", "SVR-RBF"]
-        avg_results, std_results = run_cv(X, y, 5, models = models, df_value = ["mu_Y", "mu_X"])
-
-        print("\n===== CROSS VALIDATION RESULTS =====\n")
-
+        features = ["mu_Y", "mu_X", "std_Y", "std_X", "irq_Y", "irq_X"]
+        models = ["AN-BL", "MO-LR", "RF", "POLY2-RIDGE", "SVR-RBF"]
+        avg_results, std_results = run_cv(
+            df=df,
+            y=y,
+            models=models,
+            df_value=features,
+            groups=groups
+        )
+        print("\nResults for nested leave-one-temperature-level-out\n")
         for i, (avg, std) in enumerate(zip(avg_results, std_results)):
-            print("-" * 30)
-            print(f"Model {models[i]}")
-            print("-" * 30)
+            print(f"\nModel: {models[i]}\n")
 
             for metric in avg.keys():
-                print(
-                    f"{metric.upper():<6} "
-                    f"{avg[metric]:.6f} "
-                    f"± {std[metric]:.6f}"
-                )
+                print(f"{metric.upper():<6} {avg[metric]:.6f} ± {std[metric]:.6f}")
 
     elif type == "info":
         output_dir = 'Output_files'

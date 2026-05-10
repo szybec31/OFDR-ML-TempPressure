@@ -1,78 +1,70 @@
 import numpy as np
-from sklearn.metrics import f1_score
-from .utils.remake_config import clean_model_config
+from sklearn.model_selection import GridSearchCV, GroupKFold
 from .utils.metrics import evaluate
-
-def run_experiment(df, y, split, **config):
-	# ========================
-	# model: str = "logistic" or "svm" or "random_forest" or "mlp"
-	# models: list = up to 2 models from list above (only for "late-fusion")
-	# n_estimators: int = base 200, for random_forest
-    # max_depth: int = base 20, for random_forest
-	# max_features_rf: str = base 'sqrt', for random_forest
-	# ========================
+from .models.physical_model import train_physical_model
+from .models.linear import train_linear
+from .models.poly2_ridge import train_poly2_ridge
+from .models.svr_rbf import train_svr_rbf
+from .models.randomforest import train_random_forest
 
 
-	# ========================
-	# VALIDATE all data
-    # ========================
-	if "models" not in config:
-		if "model" not in config:
-			raise ValueError("Choose model")
-		config["models"] = [config["model"]]
-	
+def run_experiment(X_train, y_train, X_test, y_test, models):
+    train_series = X_train["series_id"]
+    ml_features = [c for c in X_train.columns if
+                   c not in ["series_id", "is_temp_calibration", "is_pressure_calibration", "is_joint_regression"]]
 
-	## LISTS:
-	X = df[config["df_value"]]
+    evaluations = []
+    predictions = []
 
-    # ========================
-    # SPLIT
-    # ========================
-	train_idx, test_idx = split
+    grids = {
+        "POLY2-RIDGE": {"ridge__alpha": [0.1, 1.0, 10.0]},
+        "SVR-RBF": {
+            "svr__estimator__C": [1, 10, 100],
+            "svr__estimator__epsilon": [0.01, 0.05, 0.1]
+        },
+        "RF": {
+            "n_estimators": [300],
+            "max_depth": [3, 5, None],
+            "min_samples_leaf": [1, 2]
+        }
+    }
 
-	X_train = X.iloc[train_idx]
-	X_test  = X.iloc[test_idx]
+    for model_name in models:
+        print(f"  Traning: {model_name}", end=" ", flush=True)
 
-	y_train = y.iloc[train_idx]
-	y_test  = y.iloc[test_idx]
+        if model_name == "AN-BL":
+            best_model = train_physical_model(X_train, y_train)
 
-    # ========================
-    # MODELS
-    # ========================
-	evaluations = []
+        elif model_name == "MO-LR":
+            best_model = train_linear(X_train[ml_features], y_train)
 
-	for model_name in config["models"]:
+        else:
+            if model_name == "POLY2-RIDGE":
+                base = train_poly2_ridge(X_train[ml_features], y_train, {})
+            elif model_name == "SVR-RBF":
+                base = train_svr_rbf(X_train[ml_features], y_train, {})
+            elif model_name == "RF":
+                base = train_random_forest(X_train[ml_features], y_train, {})
 
-		print(f"Model: {model_name}")
+            inner_cv = GroupKFold(n_splits=3)
+            grid_search = GridSearchCV(
+                estimator=base,
+                param_grid=grids[model_name],
+                cv=inner_cv,
+                scoring='neg_mean_absolute_error',
+                n_jobs=-1
+            )
+            grid_search.fit(X_train[ml_features], y_train, groups=train_series)
+            best_model = grid_search.best_estimator_
 
-		if model_name == "MO-LR":
-			from .models.linear import train_linear
-			model = train_linear(X_train, y_train)
+        if model_name == "AN-BL":
+            y_pred = best_model.predict(X_test)
+        else:
+            y_pred = best_model.predict(X_test[ml_features])
 
-		elif model_name == "POLY2-RIDGE":
-			from .models.poly2_ridge import train_poly2_ridge
-			model = train_poly2_ridge(X_train, y_train, config)
+        evaluations.append(evaluate(y_test, y_pred))
+        predictions.append(y_pred)
+        print("- OK")
 
-		elif model_name == "SVR-RBF":
-			from .models.svr_rbf import train_svr_rbf
-			model = train_svr_rbf(X_train, y_train, config)
+    return evaluations, predictions
 
-		elif model_name == "RF":
-			from .models.randomforest import train_random_forest
-			model = train_random_forest(X_train, y_train, config)
-
-		# elif model_name == "AN-BL":
-		# 	from .models.physical_model import AnalyticalBaseline
-		# 	model = AnalyticalBaseline()
-		# 	model.fit(X_train, y_train)
-
-		else:
-			raise ValueError("Unknown model")
-
-		y_pred = model.predict(X_test)
-
-		evaluations.append(
-			evaluate(y_test, y_pred)
-        )
-
-	return evaluations

@@ -1,91 +1,71 @@
 import numpy as np
+import pandas as pd
+from sklearn.base import BaseEstimator, RegressorMixin
 from sklearn.linear_model import LinearRegression
 
-# calculate_A_B -> zbiór treningowy w foldzie gdzie
-# calculate_C -> zbiór treningowy w foldzie
-# calculate_DT_p -> zbiór testowy w foldzie
 
-'''
-na przyszłość
-    # PODZBIORY tylko z TRAIN
-    df_temp = df_train[df_train["pressure"] < 0.05]
-    df_pressure = df_train[abs(df_train["dT"]) < 0.1]
-
-    model.calculate_A_B(df_temp)
-    model.calculate_C(df_pressure)
-
-    # TEST → tylko predykcja
-    for row in df_test:
-        model.calculate_DT_p(...)
-'''
-
-class PhysicalModel():
-
+class PhysicalModel(BaseEstimator, RegressorMixin):
     def __init__(self):
-        self.Ax = None
-        self.Bx = None
-        self.Ay = None
-        self.By = None
-        self.Cx = None
-        self.Cy = None
+        # Domyślne wartości czułości (typowe dla K-SHF), żeby nie było dzielenia przez zero, jeśli brakuje
+        # kalibracji w foldzie
+        self.Ax = 0.0001
+        self.Bx = -1.0
+        self.Ay = 0.0001
+        self.By = -1.0
+        self.Cx = -1.9
+        self.Cy = 0.7
 
-    # ======================
-    # 1. TEMPERATURA
-    # ======================
-    def calculate_A_B(self, df_temp):
+    def fit(self, X, y):
+        sig_x = X["mu_X"].values
+        sig_y = X["mu_Y"].values
+        p_true = y.iloc[:, 0].values
+        t_true = y.iloc[:, 1].values
 
-        # df_temp: tylko pressure ≈ 0
+        mask_temp = X["is_temp_calibration"] == True
+        if np.any(mask_temp):
+            T = t_true[mask_temp]
+            feat_T = np.column_stack([T ** 2, T])
+            self.Ax, self.Bx = LinearRegression(fit_intercept=False).fit(feat_T, sig_x[mask_temp]).coef_
+            self.Ay, self.By = LinearRegression(fit_intercept=False).fit(feat_T, sig_y[mask_temp]).coef_
 
-        T = df_temp["dT"].values
-        X = np.column_stack([T**2, T])
+        mask_press = X["is_pressure_calibration"] == True
+        if np.any(mask_press):
+            P = p_true[mask_press].reshape(-1, 1)
+            self.Cx = LinearRegression(fit_intercept=False).fit(P, sig_x[mask_press]).coef_[0]
+            self.Cy = LinearRegression(fit_intercept=False).fit(P, sig_y[mask_press]).coef_[0]
 
-        # X channel
-        model_x = LinearRegression().fit(X, df_temp["x_signal"])
-        self.Ax, self.Bx = model_x.coef_
+        return self
 
-        # Y channel
-        model_y = LinearRegression().fit(X, df_temp["y_signal"])
-        self.Ay, self.By = model_y.coef_
+    def predict(self, X):
+        if isinstance(X, pd.DataFrame):
+            mu_X = X["mu_X"].values
+            mu_Y = X["mu_Y"].values
+        else:
+            mu_X = X[:, 1]
+            mu_Y = X[:, 0]
 
-    # ======================
-    # 2. CIŚNIENIE
-    # ======================
-    def calculate_C(self, df_pressure):
+        preds = []
+        for mx, my in zip(mu_X, mu_Y):
+            denom_x = self.Cx if self.Cx != 0 else -1.9
+            denom_y = self.Cy if self.Cy != 0 else 0.7
 
-        # df_pressure: tylko ΔT ≈ 0
+            a = (self.Ay / denom_y) - (self.Ax / denom_x)
+            b = (self.By / denom_y) - (self.Bx / denom_x)
+            c = (mx / denom_x) - (my / denom_y)
 
-        p = df_pressure["pressure"].values.reshape(-1, 1)
+            delta = b ** 2 - 4 * a * c
+            if delta < 0:
+                T = 0
+            else:
+                T1 = (-b + np.sqrt(delta)) / (2 * a)
+                T2 = (-b - np.sqrt(delta)) / (2 * a)
+                T = T1 if abs(T1) < abs(T2) else T2
 
-        model_x = LinearRegression().fit(p, df_pressure["x_signal"])
-        self.Cx = model_x.coef_[0]
+            p = (mx - self.Ax * T ** 2 - self.Bx * T) / denom_x
+            preds.append([p, T])
 
-        model_y = LinearRegression().fit(p, df_pressure["y_signal"])
-        self.Cy = model_y.coef_[0]
+        return np.array(preds)
 
-    # ======================
-    # 3. ROZWIĄZANIE UKŁADU
-    # ======================
-    def calculate_DT_p(self, mu_X, mu_Y):
 
-        # współczynniki równania kwadratowego
-        a = (self.Ay / self.Cy) - (self.Ax / self.Cx)
-        b = (self.By / self.Cy) - (self.Bx / self.Cx)
-        c = (mu_Y / self.Cy) - (mu_X / self.Cx)
-
-        # Δ = b² - 4ac
-        delta = b**2 - 4*a*c
-
-        if delta < 0:
-            return None, None
-
-        # dwa rozwiązania
-        T1 = (-b + np.sqrt(delta)) / (2*a)
-        T2 = (-b - np.sqrt(delta)) / (2*a)
-
-        # wybierz sensowne (np. bliższe 0)
-        T = T1 if abs(T1) < abs(T2) else T2
-
-        # policz p
-        p = (mu_X - self.Ax*T**2 - self.Bx*T) / self.Cx
-
-        return T, p
+def train_physical_model(X, y):
+    return PhysicalModel().fit(X, y)
