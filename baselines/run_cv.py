@@ -72,3 +72,18 @@ def run_cv(df, y, models, df_value, groups):
 
     return final_avg, final_std
 
+
+def run_ablation_test(name, dataframe, features_list):
+    print(f"\nTest ablacji \"{name}\"")
+    y_local = dataframe[["pressure", "dT"]]
+    groups_local = dataframe["Tp"]
+
+    avg, _ = run_cv(
+        df=dataframe,
+        y=y_local,
+        models=["MO-LR"],
+        df_value=features_list,
+        groups=groups_local
+    )
+    return avg[0]
+

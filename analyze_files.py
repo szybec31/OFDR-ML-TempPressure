@@ -143,3 +143,4 @@ if __name__ == "__main__":
     df_summary = build_folder_summary(df_meta)
     df_result = detect_channel_swap(df_summary)
     print(df_result)
+
