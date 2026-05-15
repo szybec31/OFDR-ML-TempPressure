@@ -13,9 +13,11 @@ def evaluate(y_true, y_pred):
         yt = y_true.iloc[:, i].values
         yp = y_pred[:, i]
 
+        errors = yt - yp
         mse = mean_squared_error(yt, yp)
         results[f"{name}_mae"] = mean_absolute_error(yt, yp)
         results[f"{name}_rmse"] = np.sqrt(mse)
+        results[f"{name}_maxae"] = np.max(np.abs(errors))
 
         if np.std(yt) < 1e-6:
             results[f"{name}_r2"] = np.nan
