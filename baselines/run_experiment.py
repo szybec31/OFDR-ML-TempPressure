@@ -55,6 +55,8 @@ def run_experiment(X_train, y_train, X_test, y_test, models):
                 n_jobs=-1
             )
             grid_search.fit(X_train[ml_features], y_train, groups=train_series)
+            print(f"\n    Best params: {grid_search.best_params_}")
+            print(f"    Best CV MAE: {-grid_search.best_score_:.4f}")
             best_model = grid_search.best_estimator_
 
         if model_name == "AN-BL":

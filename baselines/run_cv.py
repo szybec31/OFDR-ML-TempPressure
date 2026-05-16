@@ -5,7 +5,7 @@ from .run_experiment import run_experiment
 from .utils.metrics import evaluate
 
 
-def run_cv(df, y, models, df_value, groups,corrupt_train_labels=False,include_zero_end_train=False):
+def run_cv(df, y, models, df_value, groups,include_zero_end_train=False):
     logo = LeaveOneGroupOut()
     all_fold_results = {m: [] for m in models}
     all_y_true = []
@@ -23,42 +23,28 @@ def run_cv(df, y, models, df_value, groups,corrupt_train_labels=False,include_ze
         X_train_fold = X_full.iloc[train_idx].copy()
         y_train_fold = y.iloc[train_idx].copy()
 
-        # ==========================================
-        # Ablacja 3: błędne etykiety tylko w TRAIN
-        # ==========================================
-
-        if corrupt_train_labels:
-            y_train_fold.loc[
-                y_train_fold["pressure"] == 10.0,
-                "pressure"
-            ] = 11.0
-
-            y_train_fold.loc[
-                y_train_fold["pressure"] == 0.0,
-                "pressure"
-            ] = 0.01
 
         # ==========================================
         # Ablacja 4: błędnie dodaj zero_end do TRAIN
         # ==========================================
 
-        if include_zero_end_train:
-            repeat_mask = (
-                    df["is_repeatability_test"] == True
-            )
-
-            X_repeat = X_full.loc[repeat_mask]
-            y_repeat = y.loc[repeat_mask]
-
-            X_train_fold = pd.concat(
-                [X_train_fold, X_repeat],
-                ignore_index=True
-            )
-
-            y_train_fold = pd.concat(
-                [y_train_fold, y_repeat],
-                ignore_index=True
-            )
+        # if include_zero_end_train:
+        #     repeat_mask = (
+        #             df["is_repeatability_test"] == True
+        #     )
+        #
+        #     X_repeat = X_full.loc[repeat_mask]
+        #     y_repeat = y.loc[repeat_mask]
+        #
+        #     X_train_fold = pd.concat(
+        #         [X_train_fold, X_repeat],
+        #         ignore_index=True
+        #     )
+        #
+        #     y_train_fold = pd.concat(
+        #         [y_train_fold, y_repeat],
+        #         ignore_index=True
+        #     )
 
         X_test_fold = X_full.iloc[test_idx]
         y_test_fold = y.iloc[test_idx]
@@ -133,19 +119,18 @@ def run_cv(df, y, models, df_value, groups,corrupt_train_labels=False,include_ze
     return final_avg, final_std, final_avg_without_fold_1, final_std_without_fold_1
 
 
-def run_ablation_test(name, dataframe, features_list, corrupt_train_labels=False, include_zero_end_train=False):
+def run_ablation_test(name, dataframe, features_list, include_zero_end_train=False):
     print(f"\nTest ablacji \"{name}\"")
     y_local = dataframe[["pressure", "dT"]]
     groups_local = dataframe["Tp"]
 
-    avg, _ = run_cv(
+    _, _, avg, std = run_cv(
         df=dataframe,
         y=y_local,
         models=["MO-LR"],
         df_value=features_list,
         groups=groups_local,
-        corrupt_train_labels=corrupt_train_labels,
         include_zero_end_train=include_zero_end_train
     )
-    return avg[0]
+    return [avg[0], std[0]]
 
