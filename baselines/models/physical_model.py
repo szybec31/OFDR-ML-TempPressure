@@ -8,12 +8,12 @@ class PhysicalModel(BaseEstimator, RegressorMixin):
     def __init__(self):
         # Domyślne wartości czułości (typowe dla K-SHF), żeby nie było dzielenia przez zero, jeśli brakuje
         # kalibracji w foldzie
-        self.Ax = 0.0001
-        self.Bx = -1.0
-        self.Ay = 0.0001
-        self.By = -1.0
-        self.Cx = -1.9
-        self.Cy = 0.7
+        self.Ax = -0.0008698317120730003
+        self.Bx = -1.401584526610069
+        self.Ay = -0.0007269860998043833
+        self.By = -1.3960459119883708
+        self.Cx = 0.708356118866369
+        self.Cy = -1.9765915670555956
 
     def fit(self, X, y):
         sig_x = X["mu_X"].values
@@ -40,6 +40,12 @@ class PhysicalModel(BaseEstimator, RegressorMixin):
         return self
 
     def predict(self, X):
+
+        print("Parametry Modelu analitycznego:")
+        print(self.Ax, self.Ay)
+        print(self.Bx, self.By)
+        print(self.Cx, self.Cy)
+
         if isinstance(X, pd.DataFrame):
             mu_X = X["mu_X"].values
             mu_Y = X["mu_Y"].values
@@ -49,8 +55,8 @@ class PhysicalModel(BaseEstimator, RegressorMixin):
 
         preds = []
         for mx, my in zip(mu_X, mu_Y):
-            denom_x = self.Cx if abs(self.Cx) > 1e-12 else -1.9
-            denom_y = self.Cy if abs(self.Cy) > 1e-12 else 0.7
+            denom_x = self.Cx if abs(self.Cx) > 1e-12 else 0.708356118866369
+            denom_y = self.Cy if abs(self.Cy) > 1e-12 else -1.9765915670555956
 
             a = (self.Ay / denom_y) - (self.Ax / denom_x)
             b = (self.By / denom_y) - (self.Bx / denom_x)

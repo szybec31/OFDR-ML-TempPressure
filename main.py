@@ -57,6 +57,30 @@ def print_and_save(avg_results, std_results, info):
     print("\nResults saved to:")
     print("Output_files/results_main.csv")
 
+def print_ablation_test(ablation_results):
+    print("\n" + "=" * 110)
+    print(
+        f"{'Ablation scenario':<35} | "
+        f"{'P_MAE (std)':<20} | "
+        f"{'T_MAE (std)':<20} | "
+        f"{'P_R2 (std)':<20}"
+    )
+    print("-" * 110)
+
+    for name, res in ablation_results.items():
+        p_mae = f"{res[0]['pressure_mae']:.3f} ({res[1]['pressure_mae']:.3f})"
+        t_mae = f"{res[0]['dT_mae']:.3f} ({res[1]['dT_mae']:.3f})"
+        p_r2 = f"{res[0]['pressure_r2']:.3f} ({res[1]['pressure_r2']:.3f})"
+
+        print(
+            f"{name:<35} | "
+            f"{p_mae:<20} | "
+            f"{t_mae:<20} | "
+            f"{p_r2:<20}"
+        )
+
+    print("=" * 110)
+
 if __name__ == "__main__":
 
     type = "run" # "prepare", "run", "ablations" lub "info"
@@ -90,6 +114,23 @@ if __name__ == "__main__":
 
         df_train.to_csv("Output_files/stupid_dataset.csv", index=False)
 
+    elif type == "prepare_broken":
+        df = build_dataframe(broken_data=True)
+
+        output_dir = 'Output_files'
+        os.makedirs(output_dir, exist_ok=True)  # create folder if it doesn't exist
+
+        df.to_csv(os.path.join(output_dir, 'inventory_broken.csv'), index=False)
+
+        df_summary = build_folder_summary(df)
+
+        df_summary = df_summary[df_summary["ref"].notna()]
+        df_summary.to_csv(os.path.join(output_dir, 'training_dataset_broken.csv'), index=False)
+
+        df_base_for_training = df_summary[["series_id", "pressure", "dT", "Tp", "mu_Y", "mu_X", "std_Y", "std_X",
+                                           "irq_Y", "irq_X", "is_temp_calibration", "is_pressure_calibration",
+                                           "is_joint_regression", "is_repeatability_test", "low_quality"]]
+        df_base_for_training.to_csv(os.path.join(output_dir, 'paired_features_broken.csv'), index=False)
 
     elif type == "run":
         output_dir = 'Output_files'
@@ -116,37 +157,42 @@ if __name__ == "__main__":
     elif type == "ablations":
         output_dir = 'Output_files'
         file_path = os.path.join(output_dir, 'paired_features.csv')
+        file_path_broken = os.path.join(output_dir, 'paired_features_broken.csv')
 
         df_full = pd.read_csv(file_path)
+        df_broken = pd.read_csv(file_path_broken)
         df_full["diff_XY"] = df_full["mu_X"] - df_full["mu_Y"]
         df_full["mean_XY"] = (df_full["mu_X"] + df_full["mu_Y"]) / 2.0
+        df_broken["diff_XY"] = df_broken["mu_X"] - df_broken["mu_Y"]
+        df_broken["mean_XY"] = (df_broken["mu_X"] + df_broken["mu_Y"]) / 2.0
 
         ablation_results = {}
 
         # Ablacja 1: Cechy bazowe (4) vs Rozszerzone (8)
         df_clean = df_full[df_full["low_quality"] == False].copy()
+        df_cleaner = df_clean[df_clean["is_repeatability_test"] == False].copy()
+        df_broken = df_broken[(df_broken["low_quality"] == False)].copy()
         feat_4 = ["mu_X", "mu_Y", "std_X", "std_Y"]
         feat_8 = ["mu_X", "mu_Y", "std_X", "std_Y", "irq_X", "irq_Y", "diff_XY", "mean_XY"]
 
-        ablation_results["A1_4_Features"] = run_ablation_test("4 Features", df_clean, feat_4)
-        ablation_results["A1_8_Features"] = run_ablation_test("8 Features", df_clean, feat_8)
+        ablation_results["A1_4_Features"] = run_ablation_test("4 Features", df_cleaner, feat_4)
+        ablation_results["A1_8_Features"] = run_ablation_test("8 Features", df_cleaner, feat_8)
 
         # Ablacja 2: Jeden kanał vs Dwa kanały
         feat_x = ["mu_X", "std_X", "irq_X"]
         feat_y = ["mu_Y", "std_Y", "irq_Y"]
         feat_xy = ["mu_X", "mu_Y", "std_X", "std_Y", "irq_X", "irq_Y", "diff_XY", "mean_XY"]
 
-        ablation_results["A2_X_Only"] = run_ablation_test("X Channel Only", df_clean, feat_x)
-        ablation_results["A2_Y_Only"] = run_ablation_test("Y Channel Only", df_clean, feat_y)
+        ablation_results["A2_X_Only"] = run_ablation_test("X Channel Only", df_cleaner, feat_x)
+        ablation_results["A2_Y_Only"] = run_ablation_test("Y Channel Only", df_cleaner, feat_y)
         ablation_results["A2_XY_Full"] = ablation_results["A1_8_Features"]
 
         # Ablacja 3: Wpływ korekty etykiet
         # Symulacja błędu etykiet: 10 MPa -> 11 MPa i 0 MPa -> 0.01 MPa
         ablation_results["A3_Bad_Labels"] = run_ablation_test(
             "Bad Labels (11MPa/0.01MPa)",
-            df_clean,
+            df_broken,
             feat_8,
-            corrupt_train_labels=True
         )
 
         # Ablacja 4: Wpływ zero_end w treningu
@@ -157,13 +203,7 @@ if __name__ == "__main__":
             include_zero_end_train=True
         )
 
-        print("\n" + "=" * 80)
-        print(f"{'Ablation scenario':<35} | {'P_MAE':<10} | {'T_MAE':<10} | {'P_R2':<10}")
-        print("-" * 80)
-
-        for name, res in ablation_results.items():
-            print(f"{name:<35} | {res['pressure_mae']:<10.3f} | {res['dT_mae']:<10.3f} | {res['pressure_r2']:<10.3f}")
-        print("=" * 80)
+        print_ablation_test(ablation_results)
 
     elif type == "info":
         output_dir = 'Output_files'

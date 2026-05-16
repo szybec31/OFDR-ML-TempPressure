@@ -1,7 +1,7 @@
 from pathlib import Path
 import pandas as pd
 
-def build_dataframe():
+def build_dataframe(broken_data = False):
     # Column names in table
     columns = [
         "source_path",
@@ -63,7 +63,8 @@ def build_dataframe():
             pressure_raw = filename.split("-")[1]  # 0.5MPa
             pressure_corr = float(pressure_raw.split("MPa")[0])
             point_type = None if pressure_raw == None else "zero_start" if pressure_corr == 0 else "zero_end" if pressure_corr == 11 or pressure_corr == 0.01 else "pressure_point"
-            pressure_corr = None if pressure_raw == None else 0 if pressure_corr == 0 or pressure_corr == 11 or pressure_corr == 0.01 else pressure_corr
+            if not broken_data:
+                pressure_corr = None if pressure_raw == None else 0 if pressure_corr == 0 or pressure_corr == 11 or pressure_corr == 0.01 else pressure_corr
 
         except IndexError:
             pressure_raw = None
