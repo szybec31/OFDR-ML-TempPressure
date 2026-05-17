@@ -198,6 +198,11 @@ if __name__ == "__main__":
     argv = sys.argv
     argv.pop(0)
 
+    ### If you not using console uncomment line below.
+    ### You may use optins:  # "prepare", "prepare_broken", "run", "ablations", "info", "setup"
+    ### And if you run script first time use "setup"
+    #argv = "prepare"
+
     print(len(argv))
 
     while(len(argv) >= 1):
