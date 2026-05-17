@@ -58,13 +58,33 @@ def build_dataframe(broken_data = False):
 
         # === Pressure ===
         filename = parts[-1]
-        # np. Switch_channel_2-0.5MPa-1.txt
+
         try:
-            pressure_raw = filename.split("-")[1]  # 0.5MPa
-            pressure_corr = float(pressure_raw.split("MPa")[0])
-            point_type = None if pressure_raw == None else "zero_start" if pressure_corr == 0 else "zero_end" if pressure_corr == 11 or pressure_corr == 0.01 else "pressure_point"
-            if not broken_data:
-                pressure_corr = None if pressure_raw == None else 0 if pressure_corr == 0 or pressure_corr == 11 or pressure_corr == 0.01 else pressure_corr
+            pressure_raw = filename.split("-")[1]  # np. 0.5MPa
+            raw_pressure = float(pressure_raw.split("MPa")[0])
+
+            if broken_data:
+                # Wariant celowo błędny do ablacji:
+                # 11 MPa i 0.01 MPa traktujemy jako zwykłe punkty ciśnieniowe.
+                pressure_corr = raw_pressure
+
+                if raw_pressure == 0:
+                    point_type = "zero_start"
+                else:
+                    point_type = "pressure_point"
+
+            else:
+                # Wariant poprawny:
+                # 11 MPa i 0.01 MPa to końcowy powrót do zera.
+                if raw_pressure == 0:
+                    pressure_corr = 0
+                    point_type = "zero_start"
+                elif raw_pressure in [11, 0.01]:
+                    pressure_corr = 0
+                    point_type = "zero_end"
+                else:
+                    pressure_corr = raw_pressure
+                    point_type = "pressure_point"
 
         except IndexError:
             pressure_raw = None
@@ -134,6 +154,8 @@ def build_dataframe(broken_data = False):
         errors="ignore"
     )
 
+    joint_upper = 11 if broken_data else 10
+
     # conditions = {
     #     "temp_calibration;": (
     #         (df["pressure_corr_mpa"] == 0) &
@@ -172,13 +194,13 @@ def build_dataframe(broken_data = False):
 
     df["is_pressure_calibration"] = (
         (df["deltaT_label"] == 0) &
-        (df["pressure_corr_mpa"].between(0, 10)) &
+        (df["pressure_corr_mpa"].between(0, joint_upper)) &
         (df["point_type"] != "zero_end") &
         (df["pair_id"].notna())
     )
 
     df["is_joint_regression"] = (
-        (df["pressure_corr_mpa"].between(0, 10)) &
+        (df["pressure_corr_mpa"].between(0, joint_upper)) &
         (df["point_type"] != "zero_end") &
         (df["pair_id"].notna())
     )

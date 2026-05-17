@@ -18,15 +18,53 @@ def run_cv(df, y, models, df_value, groups,include_zero_end_train=False):
 #        if fold == 0:
 #            continue
         test_temp = groups.iloc[test_idx].unique()[0]
-        print(f"\n>>> FOLD {fold + 1}: Test na dT = {test_temp}C")
+        print(f"\n>>> FOLD {fold + 1}: Test na Tp = {test_temp}C")
 
         X_train_fold = X_full.iloc[train_idx].copy()
         y_train_fold = y.iloc[train_idx].copy()
+
+        if not include_zero_end_train:
+            train_mask = X_train_fold["is_repeatability_test"] == False
+            X_train_fold = X_train_fold[train_mask]
+            y_train_fold = y_train_fold.loc[X_train_fold.index]
+
+        else:
+            # Ablacja 4:
+            # celowo pozwalamy, aby zero_end weszło do treningu ML
+            repeat_train_mask = X_train_fold["is_repeatability_test"] == True
+
+            X_train_fold.loc[
+                repeat_train_mask,
+                "is_joint_regression"
+            ] = True
+
+        # ==========================================
+        # Ablacja 4: błędnie dodaj zero_end do TRAIN
+        # ==========================================
+
+        # if include_zero_end_train:
+        #     repeat_mask = (
+        #             df["is_repeatability_test"] == True
+        #     )
+        #
+        #     X_repeat = X_full.loc[repeat_mask]
+        #     y_repeat = y.loc[repeat_mask]
+        #
+        #     X_train_fold = pd.concat(
+        #         [X_train_fold, X_repeat],
+        #         ignore_index=True
+        #     )
+        #
+        #     y_train_fold = pd.concat(
+        #         [y_train_fold, y_repeat],
+        #         ignore_index=True
+        #     )
 
         X_test_fold = X_full.iloc[test_idx]
         y_test_fold = y.iloc[test_idx]
 
         joint_mask = X_test_fold["is_joint_regression"] == True
+        repeat_mask = X_test_fold["is_repeatability_test"] == True
         if not np.any(joint_mask):
             print(f"  Pominięto fold - brak danych joint_regression")
             continue
@@ -34,13 +72,17 @@ def run_cv(df, y, models, df_value, groups,include_zero_end_train=False):
         X_test_filtered = X_test_fold[joint_mask]
         y_test_filtered = y_test_fold[joint_mask]
 
+        X_repeat_filtered = X_test_fold[repeat_mask]
+        y_repeat_filtered = y_test_fold[repeat_mask]
+
         res_list, pred_list = run_experiment(
             X_train=X_train_fold,
             y_train=y_train_fold,
             X_test=X_test_filtered,
             y_test=y_test_filtered,
             models=models,
-            include_zero_end_train=include_zero_end_train
+            X_repeat=X_repeat_filtered,
+            y_repeat=y_repeat_filtered
         )
 
         all_y_true.append(y_test_filtered.values)
@@ -64,8 +106,8 @@ def run_cv(df, y, models, df_value, groups,include_zero_end_train=False):
     for m_name in models:
         m_folds = all_fold_results[m_name]
 
-        avg = {k: np.nanmean([f[k] for f in m_folds]) for k in m_folds[0]}
-        std = {k: np.nanstd([f[k] for f in m_folds]) for k in m_folds[0]}
+        avg = {k: safe_nanmean([f[k] for f in m_folds]) for k in m_folds[0]}
+        std = {k: safe_nanstd([f[k] for f in m_folds]) for k in m_folds[0]}
 
         m_preds_stacked = np.vstack(all_y_preds[m_name])
         global_metrics = evaluate(y_true_df, m_preds_stacked)
@@ -102,7 +144,7 @@ def run_ablation_test(name, dataframe, features_list, include_zero_end_train=Fal
     y_local = dataframe[["pressure", "dT"]]
     groups_local = dataframe["dT"]
 
-    avg, std, _, _ = run_cv(
+    _, _, avg, std = run_cv(
         df=dataframe,
         y=y_local,
         models=["MO-LR"],
@@ -112,3 +154,15 @@ def run_ablation_test(name, dataframe, features_list, include_zero_end_train=Fal
     )
     return [avg[0], std[0]]
 
+def safe_nanmean(values):
+    values = np.asarray(values, dtype=float)
+    if np.all(np.isnan(values)):
+        return np.nan
+    return np.nanmean(values)
+
+
+def safe_nanstd(values):
+    values = np.asarray(values, dtype=float)
+    if np.all(np.isnan(values)):
+        return np.nan
+    return np.nanstd(values)

@@ -124,7 +124,7 @@ def clean_roi(signal, roi_min=ROI_MIN, roi_max=ROI_MAX):
     mad = np.median(np.abs(values - median))
 
     if mad == 0:
-        return roi, False
+        return roi, False, len(roi) / original_len
 
     z = 0.6745 * (values - median) / mad
 
@@ -137,22 +137,35 @@ def clean_roi(signal, roi_min=ROI_MIN, roi_max=ROI_MAX):
     return clean, quality, len(clean)/original_len
 
 def compute_signal_delta(y_df, y_ref_df):
+    """
+    Zwraca oczyszczony profil w ROI dla głównych cech mu/std/iqr.
+    Uwaga: mimo historycznej nazwy funkcji nie zwraca obecnie różnicy względem zero_start,
+    ponieważ taka różnica zeruje próbki zero_start i uniemożliwia kalibrację temperaturową AN-BL.
+    Różnice zero_end - zero_start są liczone osobno jako cechy diagnostyczne.
+    """
 
     y_clean, q1, l1 = clean_roi(y_df)
     y_ref_clean, q2, l2 = clean_roi(y_ref_df)
 
     if y_clean is None or y_ref_clean is None:
-        return None, False
+        return None, False, 0, 0
+
+    y_clean = y_clean[["length", "value"]].sort_values("length").reset_index(drop=True)
+    y_ref_clean = y_ref_clean[["length", "value"]].sort_values("length").reset_index(drop=True)
 
     min_len = min(len(y_clean), len(y_ref_clean))
 
-    y_vals = y_clean["value"].values[:min_len]
-    y_ref_vals = y_ref_clean["value"].values[:min_len]
+    if min_len < 10:
+        return None, False, l1, l2
 
-    delta = y_vals - y_ref_vals
+    #y_vals = y_clean["value"].values[:min_len]
+    #y_ref_vals = y_ref_clean["value"].values[:min_len]
 
-    # return delta, (q1 and q2), l1, l2
-    return y_clean["value"].values, q1, l1, l2
+    #delta = y_vals - y_ref_vals
+
+    #return delta, (q1 and q2), l1, l2
+
+    return y_clean["value"].values[:min_len], (q1 and q2), l1, l2
 
 def quality_report(df, threshold = 0.9):
 

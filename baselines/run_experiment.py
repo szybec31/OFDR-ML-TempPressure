@@ -26,21 +26,45 @@ def joint_score(y_true, y_pred):
 
     return -score
 
-def getMLFeatures(X_train):
-    return [c for c in X_train.columns if c not in ["series_id", "is_temp_calibration", "is_pressure_calibration", "is_joint_regression", "is_repeatability_test"]]
+def compute_rd(y_repeat, y_pred_repeat):
+    """
+    Residual Drift:
+    RD = sqrt((T_pred_end - T_start)^2 + (P_pred_end - P_start)^2)
 
-def filter_dataset(X, y, req_col=None, req_value=None):
+    For zero_end:
+    P_start = 0,
+    T_start = real dT of the sample.
+    """
 
-    if req_col is not None:
-        mask = X[req_col] == req_value
+    if y_repeat is None or y_pred_repeat is None or len(y_repeat) == 0:
+        return {
+            "rd_mean": np.nan,
+            "rd_max": np.nan
+        }
 
-        X = X.loc[mask]
-        y = y.loc[mask]
+    p_true = y_repeat["pressure"].values
+    t_true = y_repeat["dT"].values
 
-    return X, y
+    p_pred = y_pred_repeat[:, 0]
+    t_pred = y_pred_repeat[:, 1]
 
-def run_experiment(X_train, y_train, X_test, y_test, models, include_zero_end_train = False):
-    ml_features = getMLFeatures(X_train)
+    rd = np.sqrt((t_pred - t_true) ** 2 + (p_pred - p_true) ** 2)
+
+    return {
+        "rd_mean": np.mean(rd),
+        "rd_max": np.max(rd)
+    }
+
+def run_experiment(X_train, y_train, X_test, y_test, models, X_repeat=None, y_repeat=None):
+    train_series = X_train["series_id"]
+    ml_features = [c for c in X_train.columns if
+                   c not in ["series_id", "is_temp_calibration", "is_pressure_calibration", "is_joint_regression", "is_repeatability_test"]]
+
+    ml_train_mask = X_train["is_joint_regression"] == True
+
+    X_train_ml = X_train.loc[ml_train_mask, ml_features]
+    y_train_ml = y_train.loc[X_train_ml.index]
+    groups_ml = train_series.loc[X_train_ml.index]
 
     evaluations = []
     predictions = []
@@ -48,9 +72,10 @@ def run_experiment(X_train, y_train, X_test, y_test, models, include_zero_end_tr
     grids = {
         "POLY2-RIDGE": {"ridge__alpha": [0.001, 0.01, 0.1, 1, 10]},
         "SVR-RBF": {
-            "svr__estimator__C": [1, 10, 100],
-            "svr__estimator__epsilon": [0.01, 0.05, 0.1],
-            "svr__estimator__gamma": ["scale", 0.1, 1]
+            "nystroem__n_components": [100, 300, 500],
+            "nystroem__gamma": [0.01, 0.1, 1.0],
+            "linear_svr__estimator__C": [1, 10, 100],
+            "linear_svr__estimator__epsilon": [0.01, 0.05, 0.1],
         },
         "RF": {
             "n_estimators": [300],
@@ -67,20 +92,15 @@ def run_experiment(X_train, y_train, X_test, y_test, models, include_zero_end_tr
             best_model = train_physical_model(X_train, y_train)
 
         elif model_name == "MO-LR":
-            if not include_zero_end_train:
-                X_train, y_train = filter_dataset(X_train, y_train, "is_joint_regression", True)
-            best_model = train_linear(X_train[ml_features], y_train)
+            best_model = train_linear(X_train_ml, y_train_ml)
 
         else:
             if model_name == "POLY2-RIDGE":
-                X_train, y_train = filter_dataset(X_train, y_train, "is_joint_regression", True)
-                base = train_poly2_ridge(X_train[ml_features], y_train, {})
+                base = train_poly2_ridge(X_train_ml, y_train_ml, {})
             elif model_name == "SVR-RBF":
-                X_train, y_train = filter_dataset(X_train, y_train, "is_joint_regression", True)
-                base = train_svr_rbf(X_train[ml_features], y_train, {})
+                base = train_svr_rbf(X_train_ml, y_train_ml, {})
             elif model_name == "RF":
-                X_train, y_train = filter_dataset(X_train, y_train, "is_joint_regression", True)
-                base = train_random_forest(X_train[ml_features], y_train, {})
+                base = train_random_forest(X_train_ml, y_train_ml, {})
 
             inner_cv = GroupKFold(n_splits=3)
             joint_scorer = make_scorer(joint_score, greater_is_better=True)
@@ -91,8 +111,7 @@ def run_experiment(X_train, y_train, X_test, y_test, models, include_zero_end_tr
                 scoring=joint_scorer,
                 n_jobs=-1
             )
-            train_series = X_train["series_id"]
-            grid_search.fit(X_train[ml_features], y_train, groups=train_series)
+            grid_search.fit(X_train_ml, y_train_ml, groups=groups_ml)
             print(f"\n    Best params: {grid_search.best_params_}")
             print(f"    Best CV MAE: {-grid_search.best_score_:.4f}")
             best_model = grid_search.best_estimator_
@@ -102,9 +121,23 @@ def run_experiment(X_train, y_train, X_test, y_test, models, include_zero_end_tr
         else:
             y_pred = best_model.predict(X_test[ml_features])
 
-        evaluations.append(evaluate(y_test, y_pred))
+        eval_result = evaluate(y_test, y_pred)
+
+        if X_repeat is not None and y_repeat is not None and len(X_repeat) > 0:
+            if model_name == "AN-BL":
+                y_pred_repeat = best_model.predict(X_repeat)
+            else:
+                y_pred_repeat = best_model.predict(X_repeat[ml_features])
+
+            eval_result.update(compute_rd(y_repeat, y_pred_repeat))
+        else:
+            eval_result.update({
+                "rd_mean": np.nan,
+                "rd_max": np.nan
+            })
+
+        evaluations.append(eval_result)
         predictions.append(y_pred)
         print("- OK")
 
     return evaluations, predictions
-

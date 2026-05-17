@@ -54,20 +54,21 @@ def build_folder_summary(df_meta):
 
             y75, y25 = np.percentile(y_signal, [75, 25])
             x75, x25 = np.percentile(x_signal, [75, 25])
-            irq_Y = y75 - y25
-            irq_X = x75 - x25
+            iqr_Y = y75 - y25
+            iqr_X = x75 - x25
 
             records.append({
                 "folder": row["temp_folder_label"],
                 "pressure": row["pressure_corr_mpa"],
                 "dT": row["deltaT_label"],
                 "Tp": row["T_plate_label"],
+                "point_type": row["point_type"],
                 "mu_Y": np.mean(y_signal),
                 "mu_X": np.mean(x_signal),
                 "std_Y": np.std(y_signal),
                 "std_X": np.std(x_signal),
-                "irq_Y": irq_Y,
-                "irq_X": irq_X,
+                "iqr_Y": iqr_Y,
+                "iqr_X": iqr_X,
                 #"role": row["role"],
                 "is_temp_calibration": row["is_temp_calibration"],
                 "is_pressure_calibration": row["is_pressure_calibration"],
@@ -90,6 +91,59 @@ def build_folder_summary(df_meta):
     df = pd.DataFrame(records)
     df["diff_XY"] = df["mu_X"] - df["mu_Y"]
     df["mean_XY"] = (df["mu_X"] + df["mu_Y"]) / 2
+    df["Xinter"] = df["mu_X"] * df["mu_Y"]
+
+    zero_ref = (
+        df[df["point_type"] == "zero_start"]
+        .sort_values(["folder", "series_id"])
+        .drop_duplicates(["folder", "series_id"])
+        [["folder", "series_id", "mu_X", "mu_Y"]]
+        .rename(columns={
+            "mu_X": "mu_X_zero_start",
+            "mu_Y": "mu_Y_zero_start"
+        })
+    )
+
+    df = df.merge(
+        zero_ref,
+        on=["folder", "series_id"],
+        how="left"
+    )
+
+    df["zero_end_shift_X"] = np.where(
+        df["point_type"] == "zero_end",
+        df["mu_X"] - df["mu_X_zero_start"],
+        np.nan
+    )
+
+    df["zero_end_shift_Y"] = np.where(
+        df["point_type"] == "zero_end",
+        df["mu_Y"] - df["mu_Y_zero_start"],
+        np.nan
+    )
+
+    order_map = {
+        "zero_start": 0,
+        "pressure_point": 1,
+        "zero_end": 2
+    }
+
+    df["_point_order"] = df["point_type"].map(order_map).fillna(1)
+    df["_pressure_order"] = np.where(df["point_type"] == "zero_end", 9999, df["pressure"])
+
+    df = df.sort_values(
+        ["folder", "series_id", "_point_order", "_pressure_order"]
+    ).reset_index(drop=True)
+
+    df["Pdir"] = (
+        df.groupby(["folder", "series_id"])["pressure"]
+        .diff()
+        .fillna(0)
+    )
+
+    df["Pdir"] = np.sign(df["Pdir"]).astype(int)
+
+    df = df.drop(columns=["_point_order", "_pressure_order"])
 
     return df
 
