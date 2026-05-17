@@ -162,6 +162,7 @@ def main(type = "prepare", broken = False):
             "Bad Labels (11MPa/0.01MPa)",
             df_broken,
             feat_8,
+            include_zero_end_train=True
         )
 
         # Ablacja 4: Wpływ zero_end w treningu
@@ -189,12 +190,27 @@ def main(type = "prepare", broken = False):
         print(f"pressure: {df["pressure"].unique()}")
 
 if __name__ == "__main__":
-    type = "info" # "prepare", "run", "ablations" lub "info"
-    broken = False
+    # type = "info" # "prepare", "run", "ablations" lub "info"
+    # broken = False
+    # main(type, broken)
+    # exit()
 
-    if len(sys.argv) >= 2:
-        type = sys.argv[1]
-    if len(sys.argv) == 3:
-        broken = sys.argv[2]
+    argv = sys.argv
+    argv.pop(0)
+
+    print(len(argv))
+
+    while(len(argv) >= 1):
+        arg = argv.pop(0)
+        if arg in ["setup", "s"]:
+            main("p")
+            main("p", True)
+            main("i")
+            break
+        else:
+            if arg in ["prepare_broken", "pb"]:
+                main("p", True)
+            else:
+                main(arg)
     
-    main(type, broken)
+    

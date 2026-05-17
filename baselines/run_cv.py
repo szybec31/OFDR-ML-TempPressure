@@ -100,7 +100,7 @@ def run_cv(df, y, models, df_value, groups,include_zero_end_train=False):
 def run_ablation_test(name, dataframe, features_list, include_zero_end_train=False):
     print(f"\nTest ablacji \"{name}\"")
     y_local = dataframe[["pressure", "dT"]]
-    groups_local = dataframe["Tp"]
+    groups_local = dataframe["dT"]
 
     avg, std, _, _ = run_cv(
         df=dataframe,
