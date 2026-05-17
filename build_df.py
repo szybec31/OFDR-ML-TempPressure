@@ -179,6 +179,7 @@ def build_dataframe(broken_data = False):
 
     df["is_joint_regression"] = (
         (df["pressure_corr_mpa"].between(0, 10)) &
+        (df["point_type"] != "zero_end") &
         (df["pair_id"].notna())
     )
 

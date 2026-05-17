@@ -11,40 +11,17 @@ def run_cv(df, y, models, df_value, groups,include_zero_end_train=False):
     all_y_true = []
     all_y_preds = {m: [] for m in models}
 
-    flags = ["is_temp_calibration", "is_pressure_calibration", "is_joint_regression"]
+    flags = ["is_temp_calibration", "is_pressure_calibration", "is_joint_regression", "is_repeatability_test"]
     X_full = df[df_value + flags + ["series_id"]]
 
     for fold, (train_idx, test_idx) in enumerate(logo.split(X_full, y, groups=groups)):
 #        if fold == 0:
 #            continue
         test_temp = groups.iloc[test_idx].unique()[0]
-        print(f"\n>>> FOLD {fold + 1}: Test na Tp = {test_temp}C")
+        print(f"\n>>> FOLD {fold + 1}: Test na dT = {test_temp}C")
 
         X_train_fold = X_full.iloc[train_idx].copy()
         y_train_fold = y.iloc[train_idx].copy()
-
-
-        # ==========================================
-        # Ablacja 4: błędnie dodaj zero_end do TRAIN
-        # ==========================================
-
-        # if include_zero_end_train:
-        #     repeat_mask = (
-        #             df["is_repeatability_test"] == True
-        #     )
-        #
-        #     X_repeat = X_full.loc[repeat_mask]
-        #     y_repeat = y.loc[repeat_mask]
-        #
-        #     X_train_fold = pd.concat(
-        #         [X_train_fold, X_repeat],
-        #         ignore_index=True
-        #     )
-        #
-        #     y_train_fold = pd.concat(
-        #         [y_train_fold, y_repeat],
-        #         ignore_index=True
-        #     )
 
         X_test_fold = X_full.iloc[test_idx]
         y_test_fold = y.iloc[test_idx]
@@ -62,7 +39,8 @@ def run_cv(df, y, models, df_value, groups,include_zero_end_train=False):
             y_train=y_train_fold,
             X_test=X_test_filtered,
             y_test=y_test_filtered,
-            models=models
+            models=models,
+            include_zero_end_train=include_zero_end_train
         )
 
         all_y_true.append(y_test_filtered.values)
@@ -124,7 +102,7 @@ def run_ablation_test(name, dataframe, features_list, include_zero_end_train=Fal
     y_local = dataframe[["pressure", "dT"]]
     groups_local = dataframe["Tp"]
 
-    _, _, avg, std = run_cv(
+    avg, std, _, _ = run_cv(
         df=dataframe,
         y=y_local,
         models=["MO-LR"],
