@@ -2,11 +2,12 @@ from build_df import build_dataframe
 from build_global_db import build_stupid_dataset
 import pandas as pd
 import os
+import sys
 from utils import fix_dt16_folder_structure, quality_report
 from analyze_files import build_folder_summary
 from baselines.run_cv import run_cv, run_ablation_test
 
-def print_and_save(avg_results, std_results, info):
+def print_and_save(models, avg_results, std_results, info):
     # ==========================================
     # Wyświetlenie wyników w konsoli
     # ==========================================
@@ -81,65 +82,39 @@ def print_ablation_test(ablation_results):
 
     print("=" * 110)
 
-if __name__ == "__main__":
+def main(type = "prepare", broken = False):
 
-    type = "run" # "prepare", "run", "ablations" lub "info"
-
-    if type == "prepare":
+    if type in ["prepare", "p"]:
 
         fix_dt16_folder_structure()
 
-        df = build_dataframe()
+        df = build_dataframe(broken_data = broken)
 
         output_dir = 'Output_files'
         os.makedirs(output_dir, exist_ok=True)  # create folder if it doesn't exist
 
-        df.to_csv(os.path.join(output_dir, 'inventory.csv'), index=False)
+        df.to_csv(os.path.join(output_dir, 'inventory.csv' if not broken else 'inventory_broken.csv'), index=False)
 
         df_summary = build_folder_summary(df)
 
         df_summary = df_summary[df_summary["ref"].notna()]
-        df_summary.to_csv(os.path.join(output_dir, 'training_dataset.csv'), index=False)
+        df_summary.to_csv(os.path.join(output_dir, 'training_dataset.csv' if not broken else 'training_dataset_broken.csv'), index=False)
 
         df_base_for_training = df_summary[["series_id", "pressure", "dT", "Tp", "mu_Y", "mu_X", "std_Y", "std_X",
-                                           "irq_Y", "irq_X", "is_temp_calibration", "is_pressure_calibration",
+                                           "irq_Y", "irq_X", "diff_XY", "mean_XY",  "is_temp_calibration", "is_pressure_calibration",
                                            "is_joint_regression", "is_repeatability_test", "low_quality"]]
-        df_base_for_training.to_csv(os.path.join(output_dir, 'paired_features.csv'), index=False)
+        df_base_for_training.to_csv(os.path.join(output_dir, 'paired_features.csv' if not broken else 'paired_features_broken.csv'), index=False)
 
         print(quality_report(df_summary, 0.9))
 
-        exit()
-
-        df_train = build_stupid_dataset(df)
-
-        df_train.to_csv("Output_files/stupid_dataset.csv", index=False)
-
-    elif type == "prepare_broken":
-        df = build_dataframe(broken_data=True)
-
-        output_dir = 'Output_files'
-        os.makedirs(output_dir, exist_ok=True)  # create folder if it doesn't exist
-
-        df.to_csv(os.path.join(output_dir, 'inventory_broken.csv'), index=False)
-
-        df_summary = build_folder_summary(df)
-
-        df_summary = df_summary[df_summary["ref"].notna()]
-        df_summary.to_csv(os.path.join(output_dir, 'training_dataset_broken.csv'), index=False)
-
-        df_base_for_training = df_summary[["series_id", "pressure", "dT", "Tp", "mu_Y", "mu_X", "std_Y", "std_X",
-                                           "irq_Y", "irq_X", "is_temp_calibration", "is_pressure_calibration",
-                                           "is_joint_regression", "is_repeatability_test", "low_quality"]]
-        df_base_for_training.to_csv(os.path.join(output_dir, 'paired_features_broken.csv'), index=False)
-
-    elif type == "run":
+    elif type in ["run", "r"]:
         output_dir = 'Output_files'
         file_path = os.path.join(output_dir, 'paired_features.csv')
 
         df_full = pd.read_csv(file_path)
         df = df_full[df_full["low_quality"] == False].copy()
         y = df[["pressure", "dT"]]
-        groups = df["Tp"]
+        groups = df["dT"]
 
         features = ["mu_Y", "mu_X", "std_Y", "std_X", "irq_Y", "irq_X"]
         models = ["AN-BL", "MO-LR", "RF", "POLY2-RIDGE", "SVR-RBF"]
@@ -151,48 +126,43 @@ if __name__ == "__main__":
             groups=groups
         )
 
-        print_and_save(avg_results, std_results, "All Results:")
-        print_and_save(avg_results_wo_f1, std_results_wo_f1, "Results without fold 1:")
+        print_and_save(models, avg_results, std_results, "All Results:")
+        print_and_save(models, avg_results_wo_f1, std_results_wo_f1, "Results without fold 1:")
 
-    elif type == "ablations":
+    elif type in ["ablations", "a"]:
         output_dir = 'Output_files'
         file_path = os.path.join(output_dir, 'paired_features.csv')
-        file_path_broken = os.path.join(output_dir, 'paired_features_broken.csv')
 
         df_full = pd.read_csv(file_path)
-        df_broken = pd.read_csv(file_path_broken)
-        df_full["diff_XY"] = df_full["mu_X"] - df_full["mu_Y"]
-        df_full["mean_XY"] = (df_full["mu_X"] + df_full["mu_Y"]) / 2.0
-        df_broken["diff_XY"] = df_broken["mu_X"] - df_broken["mu_Y"]
-        df_broken["mean_XY"] = (df_broken["mu_X"] + df_broken["mu_Y"]) / 2.0
-
+        
         ablation_results = {}
 
         # Ablacja 1: Cechy bazowe (4) vs Rozszerzone (8)
         df_clean = df_full[df_full["low_quality"] == False].copy()
-        df_cleaner = df_clean[df_clean["is_repeatability_test"] == False].copy()
-        df_broken = df_broken[(df_broken["low_quality"] == False)].copy()
         feat_4 = ["mu_X", "mu_Y", "std_X", "std_Y"]
         feat_8 = ["mu_X", "mu_Y", "std_X", "std_Y", "irq_X", "irq_Y", "diff_XY", "mean_XY"]
 
-        ablation_results["A1_4_Features"] = run_ablation_test("4 Features", df_cleaner, feat_4)
-        ablation_results["A1_8_Features"] = run_ablation_test("8 Features", df_cleaner, feat_8)
+        ablation_results["A1_4_Features"] = run_ablation_test("4 Features", df_clean, feat_4)
+        ablation_results["A1_8_Features"] = run_ablation_test("8 Features", df_clean, feat_8)
 
         # Ablacja 2: Jeden kanał vs Dwa kanały
         feat_x = ["mu_X", "std_X", "irq_X"]
         feat_y = ["mu_Y", "std_Y", "irq_Y"]
         feat_xy = ["mu_X", "mu_Y", "std_X", "std_Y", "irq_X", "irq_Y", "diff_XY", "mean_XY"]
 
-        ablation_results["A2_X_Only"] = run_ablation_test("X Channel Only", df_cleaner, feat_x)
-        ablation_results["A2_Y_Only"] = run_ablation_test("Y Channel Only", df_cleaner, feat_y)
+        ablation_results["A2_X_Only"] = run_ablation_test("X Channel Only", df_clean, feat_x)
+        ablation_results["A2_Y_Only"] = run_ablation_test("Y Channel Only", df_clean, feat_y)
         ablation_results["A2_XY_Full"] = ablation_results["A1_8_Features"]
 
         # Ablacja 3: Wpływ korekty etykiet
         # Symulacja błędu etykiet: 10 MPa -> 11 MPa i 0 MPa -> 0.01 MPa
+        df_broken = pd.read_csv(os.path.join(output_dir, 'paired_features_broken.csv'))
+        df_broken = df_broken[(df_broken["low_quality"] == False)].copy()
         ablation_results["A3_Bad_Labels"] = run_ablation_test(
             "Bad Labels (11MPa/0.01MPa)",
             df_broken,
             feat_8,
+            include_zero_end_train=True
         )
 
         # Ablacja 4: Wpływ zero_end w treningu
@@ -205,7 +175,7 @@ if __name__ == "__main__":
 
         print_ablation_test(ablation_results)
 
-    elif type == "info":
+    elif type in ["info", "i"]:
         output_dir = 'Output_files'
         df = pd.read_csv(os.path.join(output_dir, 'paired_features.csv'))
 
@@ -218,3 +188,29 @@ if __name__ == "__main__":
         print(df.info())
         
         print(f"pressure: {df["pressure"].unique()}")
+
+if __name__ == "__main__":
+    # type = "info" # "prepare", "run", "ablations" lub "info"
+    # broken = False
+    # main(type, broken)
+    # exit()
+
+    argv = sys.argv
+    argv.pop(0)
+
+    print(len(argv))
+
+    while(len(argv) >= 1):
+        arg = argv.pop(0)
+        if arg in ["setup", "s"]:
+            main("p")
+            main("p", True)
+            main("i")
+            break
+        else:
+            if arg in ["prepare_broken", "pb"]:
+                main("p", True)
+            else:
+                main(arg)
+    
+    
