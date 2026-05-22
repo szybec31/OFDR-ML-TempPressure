@@ -42,6 +42,7 @@ def filter_dataset(X, y, req_col=None, req_value=None):
 def run_experiment(X_train, y_train, X_test, y_test, models, include_zero_end_train = False):
     ml_features = getMLFeatures(X_train)
 
+    print("Test shape: ",X_test.shape)
     evaluations = []
     predictions = []
 
@@ -61,26 +62,29 @@ def run_experiment(X_train, y_train, X_test, y_test, models, include_zero_end_tr
     }
 
     for model_name in models:
+        X_train_local = X_train.copy()
+        y_train_local = y_train.copy()
+
         print(f"  Traning: {model_name}", end=" ", flush=True)
 
         if model_name == "AN-BL":
-            best_model = train_physical_model(X_train, y_train)
+            best_model = train_physical_model(X_train_local, y_train_local)
 
         elif model_name == "MO-LR":
             if not include_zero_end_train:
-                X_train, y_train = filter_dataset(X_train, y_train, "is_joint_regression", True)
-            best_model = train_linear(X_train[ml_features], y_train)
+                X_train_local, y_train_local = filter_dataset(X_train_local, y_train_local, "is_joint_regression", True)
+            best_model = train_linear(X_train_local[ml_features], y_train_local)
 
         else:
             if model_name == "POLY2-RIDGE":
-                X_train, y_train = filter_dataset(X_train, y_train, "is_joint_regression", True)
-                base = train_poly2_ridge(X_train[ml_features], y_train, {})
+                X_train_local, y_train_local = filter_dataset(X_train_local, y_train_local, "is_joint_regression", True)
+                base = train_poly2_ridge(X_train_local[ml_features], y_train_local, {})
             elif model_name == "SVR-RBF":
-                X_train, y_train = filter_dataset(X_train, y_train, "is_joint_regression", True)
-                base = train_svr_rbf(X_train[ml_features], y_train, {})
+                X_train_local, y_train_local = filter_dataset(X_train_local, y_train_local, "is_joint_regression", True)
+                base = train_svr_rbf(X_train_local[ml_features], y_train_local, {})
             elif model_name == "RF":
-                X_train, y_train = filter_dataset(X_train, y_train, "is_joint_regression", True)
-                base = train_random_forest(X_train[ml_features], y_train, {})
+                X_train_local, y_train_local = filter_dataset(X_train_local, y_train_local, "is_joint_regression", True)
+                base = train_random_forest(X_train_local[ml_features], y_train_local, {})
 
             inner_cv = GroupKFold(n_splits=3)
             joint_scorer = make_scorer(joint_score, greater_is_better=True)
@@ -91,10 +95,10 @@ def run_experiment(X_train, y_train, X_test, y_test, models, include_zero_end_tr
                 scoring=joint_scorer,
                 n_jobs=-1
             )
-            train_series = X_train["series_id"]
-            grid_search.fit(X_train[ml_features], y_train, groups=train_series)
-            print(f"\n    Best params: {grid_search.best_params_}")
-            print(f"    Best CV MAE: {-grid_search.best_score_:.4f}")
+            train_series = X_train_local["series_id"]
+            grid_search.fit(X_train_local[ml_features], y_train_local, groups=train_series)
+            #print(f"\n    Best params: {grid_search.best_params_}")
+            #print(f"    Best CV MAE: {-grid_search.best_score_:.4f}")
             best_model = grid_search.best_estimator_
 
         if model_name == "AN-BL":
