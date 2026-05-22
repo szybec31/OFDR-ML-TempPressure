@@ -41,10 +41,10 @@ class PhysicalModel(BaseEstimator, RegressorMixin):
 
     def predict(self, X):
 
-        print("Parametry Modelu analitycznego:")
-        print(self.Ax, self.Ay)
-        print(self.Bx, self.By)
-        print(self.Cx, self.Cy)
+        #print("Parametry Modelu analitycznego:")
+        #print(self.Ax, self.Ay)
+        #print(self.Bx, self.By)
+        #print(self.Cx, self.Cy)
 
         if isinstance(X, pd.DataFrame):
             mu_X = X["mu_X"].values

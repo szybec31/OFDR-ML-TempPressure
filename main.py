@@ -6,6 +6,7 @@ import sys
 from utils import fix_dt16_folder_structure, quality_report
 from analyze_files import build_folder_summary
 from baselines.run_cv import run_cv, run_ablation_test
+import csv
 
 def print_and_save(models, avg_results, std_results, info):
     # ==========================================
@@ -58,7 +59,8 @@ def print_and_save(models, avg_results, std_results, info):
     print("\nResults saved to:")
     print("Output_files/results_main.csv")
 
-def print_ablation_test(ablation_results):
+
+def print_ablation_test(ablation_results, csv_path=None):
     print("\n" + "=" * 110)
     print(
         f"{'Ablation scenario':<35} | "
@@ -67,6 +69,8 @@ def print_ablation_test(ablation_results):
         f"{'P_R2 (std)':<20}"
     )
     print("-" * 110)
+
+    csv_rows = []
 
     for name, res in ablation_results.items():
         p_mae = f"{res[0]['pressure_mae']:.3f} ({res[1]['pressure_mae']:.3f})"
@@ -80,7 +84,23 @@ def print_ablation_test(ablation_results):
             f"{p_r2:<20}"
         )
 
+        csv_rows.append({
+            "scenario": name,
+            "pressure_mae": f"{res[0]['pressure_mae']:.3f} ({res[1]['pressure_mae']:.3f})",
+            "dT_mae": f"{res[0]['dT_mae']:.3f} ({res[1]['dT_mae']:.3f})",
+            "pressure_r2": f"{res[0]['pressure_r2']:.3f} ({res[1]['pressure_r2']:.3f})",
+        })
+
     print("=" * 110)
+
+    # zapis CSV
+    if csv_path is not None:
+        with open(csv_path, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=csv_rows[0].keys())
+            writer.writeheader()
+            writer.writerows(csv_rows)
+
+        print(f"\nWyniki zapisano do CSV: {csv_path}")
 
 def main(type = "prepare", broken = False):
 
@@ -173,8 +193,7 @@ def main(type = "prepare", broken = False):
             include_zero_end_train=True
         )
 
-        print_ablation_test(ablation_results)
-
+        print_ablation_test(ablation_results,csv_path="Output_files/ablation_results.csv")
     elif type in ["info", "i"]:
         output_dir = 'Output_files'
         df = pd.read_csv(os.path.join(output_dir, 'paired_features.csv'))

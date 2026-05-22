@@ -5,11 +5,15 @@ from .run_experiment import run_experiment
 from .utils.metrics import evaluate
 
 
-def run_cv(df, y, models, df_value, groups,include_zero_end_train=False):
+def run_cv(df, y, models, df_value, groups,include_zero_end_train=False, prediction_file=True):
     logo = LeaveOneGroupOut()
     all_fold_results = {m: [] for m in models}
     all_y_true = []
     all_y_preds = {m: [] for m in models}
+
+    # do zapisu do predictions.csv
+    fold_metrics_rows = []
+    prediction_rows = []
 
     flags = ["is_temp_calibration", "is_pressure_calibration", "is_joint_regression", "is_repeatability_test"]
     X_full = df[df_value + flags + ["series_id"]]
@@ -48,6 +52,48 @@ def run_cv(df, y, models, df_value, groups,include_zero_end_train=False):
             print(res_list[i])
             all_fold_results[m_name].append(res_list[i])
             all_y_preds[m_name].append(pred_list[i])
+
+            if prediction_file == True:
+                if fold == 0:
+                    continue
+                # ==========================================
+                # ZAPIS METRYK PER FOLD
+                # ==========================================
+
+                fold_row = {
+                    "fold": fold + 1,
+                    "test_dT": test_temp,
+                    "model": m_name
+                }
+
+                fold_row.update(res_list[i])
+
+                fold_metrics_rows.append(fold_row)
+
+                # ==========================================
+                # ZAPIS PREDYKCJI PER SAMPLE
+                # ==========================================
+
+                preds = pred_list[i]
+
+                for j in range(len(preds)):
+                    prediction_rows.append({
+                        "fold": fold + 1,
+                        "test_dT": test_temp,
+                        "model": m_name,
+
+                        "pressure_true":
+                            y_test_filtered.iloc[j]["pressure"],
+
+                        "pressure_pred":
+                            preds[j, 0],
+
+                        "dT_true":
+                            y_test_filtered.iloc[j]["dT"],
+
+                        "dT_pred":
+                            preds[j, 1]
+                    })
 
     final_avg = []
     final_std = []
@@ -93,6 +139,25 @@ def run_cv(df, y, models, df_value, groups,include_zero_end_train=False):
 
         final_avg_without_fold_1.append(avg)
         final_std_without_fold_1.append(std)
+
+    if prediction_file == True:
+        # ==========================================
+        # SAVE CSV
+        # ==========================================
+
+        fold_metrics_df = pd.DataFrame(fold_metrics_rows)
+
+        predictions_df = pd.DataFrame(prediction_rows)
+
+        fold_metrics_df.to_csv(
+            "Output_files/metrics_per_fold.csv",
+            index=False
+        )
+
+        predictions_df.to_csv(
+            "Output_files/predictions.csv",
+            index=False
+        )
 
     return final_avg, final_std, final_avg_without_fold_1, final_std_without_fold_1
 
