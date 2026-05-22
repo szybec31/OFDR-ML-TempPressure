@@ -217,8 +217,12 @@ if __name__ == "__main__":
     argv = sys.argv
     argv.pop(0)
 
-    if(len(argv) == 0):
-        argv = ["run"] #"setup", "prepare", "prepare_broken", "run", "ablations" lub "info" (s, p, pb, r, i, a)
+    ### If you not using console uncomment line below.
+    ### You may use optins:  # "prepare", "prepare_broken", "run", "ablations", "info", "setup"
+    ### And if you run script first time use "setup"
+    #argv = "prepare"
+
+    print(len(argv))
 
     while(len(argv) >= 1):
         arg = argv.pop(0)

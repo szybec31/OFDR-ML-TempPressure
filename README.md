@@ -19,7 +19,19 @@
    ```
 4. Create folders: Output_files and PAKA_AI with data
 
-5. Run main.py script for creating inventory.csv and global_db.csv 
+5. Run Project:
+- When you first time run main.py script use setup arg:
+
+  ```
+  python main.py setup
+  ```
+- Using script you may also use other arg: `prepare`, `prepare_broken`, `run`, `ablations`, `info`, `setup`, or shorter using first letter (`p`, `pb`, `r`, `a`, `i`, `s`)
+- Option `setup` is equivalent of `prepare`, `prepare_broken` and `info`.
+- Also you may use more than one option, for example:
+  ```
+  python main.py prepare prepare_broken run info
+  ```
+  Them all option all executed in a row.
 
 6. Run jupyterlab (*optional)
    ```
