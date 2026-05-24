@@ -5,7 +5,7 @@ from .run_experiment import run_experiment
 from .utils.metrics import evaluate
 
 
-def run_cv(df, y, models, df_value, groups,include_zero_end_train=False, prediction_file=True):
+def run_cv(df, y, models, df_value, groups, include_zero_end_train=False, prediction_file=False):
     logo = LeaveOneGroupOut()
     all_fold_results = {m: [] for m in models}
     all_y_true = []
@@ -14,13 +14,13 @@ def run_cv(df, y, models, df_value, groups,include_zero_end_train=False, predict
     # do zapisu do predictions.csv
     fold_metrics_rows = []
     prediction_rows = []
+    fold_to_remove = []
+    stored_fold_ids = []
 
     flags = ["is_temp_calibration", "is_pressure_calibration", "is_joint_regression", "is_repeatability_test"]
     X_full = df[df_value + flags + ["series_id"]]
 
     for fold, (train_idx, test_idx) in enumerate(logo.split(X_full, y, groups=groups)):
-#        if fold == 0:
-#            continue
         test_temp = groups.iloc[test_idx].unique()[0]
         print(f"\n>>> FOLD {fold + 1}: Test na dT = {test_temp}C")
 
@@ -32,8 +32,15 @@ def run_cv(df, y, models, df_value, groups,include_zero_end_train=False, predict
 
         joint_mask = X_test_fold["is_joint_regression"] == True
         if not np.any(joint_mask):
-            print(f"  Pominięto fold - brak danych joint_regression")
+            print(f"Pominięto fold - brak danych joint_regression")
             continue
+
+        istc = sum(X_train_fold["is_temp_calibration"] == True)
+        ispc = sum(X_train_fold["is_pressure_calibration"] == True)
+        print("\n is_temp_calibration: ", istc)
+        print("\n is_pressure_calibration: ", ispc)
+        if ispc * istc == 0:
+            fold_to_remove.append(fold)
 
         X_test_filtered = X_test_fold[joint_mask]
         y_test_filtered = y_test_fold[joint_mask]
@@ -46,6 +53,8 @@ def run_cv(df, y, models, df_value, groups,include_zero_end_train=False, predict
             models=models,
             include_zero_end_train=include_zero_end_train
         )
+
+        stored_fold_ids.append(fold)
 
         all_y_true.append(y_test_filtered.values)
         for i, m_name in enumerate(models):
@@ -124,8 +133,10 @@ def run_cv(df, y, models, df_value, groups,include_zero_end_train=False, predict
         final_std.append(std)
 
     for m_name in models:
-        m_folds = all_fold_results[m_name].copy()
-        m_folds.pop(0)
+        m_folds = [
+            f for f, fid in zip(all_fold_results[m_name], stored_fold_ids)
+            if fid not in fold_to_remove
+        ]
 
         avg = {k: np.nanmean([f[k] for f in m_folds]) for k in m_folds[0]}
         std = {k: np.nanstd([f[k] for f in m_folds]) for k in m_folds[0]}
@@ -159,20 +170,19 @@ def run_cv(df, y, models, df_value, groups,include_zero_end_train=False, predict
             index=False
         )
 
-    return final_avg, final_std, final_avg_without_fold_1, final_std_without_fold_1
+    return final_avg, final_std, final_avg_without_fold_1, final_std_without_fold_1, fold_to_remove
 
 
-def run_ablation_test(name, dataframe, features_list, include_zero_end_train=False):
+def run_ablation_test(name, dataframe, features_list, groups, include_zero_end_train=False):
     print(f"\nTest ablacji \"{name}\"")
     y_local = dataframe[["pressure", "dT"]]
-    groups_local = dataframe["dT"]
 
-    avg, std, _, _ = run_cv(
+    avg, std, _, _, _ = run_cv(
         df=dataframe,
         y=y_local,
         models=["MO-LR"],
         df_value=features_list,
-        groups=groups_local,
+        groups=groups,
         include_zero_end_train=include_zero_end_train
     )
     return [avg[0], std[0]]
