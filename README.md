@@ -33,7 +33,9 @@
   ```
   Them all option all executed in a row.
 
-6. Run jupyterlab (*optional)
+6. To evaluate models using statistical test you may use script: `stat_test.py` with 3 argv: 1st_model_name 2nd_model_name and metric. Or using help arg.
+
+7. Run jupyterlab (*optional)
    ```
    python -m jupyterlab
    ```

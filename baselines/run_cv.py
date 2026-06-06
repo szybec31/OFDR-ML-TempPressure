@@ -116,8 +116,19 @@ def run_cv(df, y, models, df_value, groups, include_zero_end_train=False, predic
     y_true_stacked = np.vstack(all_y_true)
     y_true_df = pd.DataFrame(y_true_stacked, columns=["pressure", "dT"])
 
+    folds_to_save = []
+
     for m_name in models:
         m_folds = all_fold_results[m_name]
+
+        for i, f in enumerate(m_folds):
+            row = {
+                "model": m_name,
+                "fold": i,
+                "local": not (i in fold_to_remove)
+            }
+            row.update(f)
+            folds_to_save.append(row)
 
         avg = {k: np.nanmean([f[k] for f in m_folds]) for k in m_folds[0]}
         std = {k: np.nanstd([f[k] for f in m_folds]) for k in m_folds[0]}
@@ -131,6 +142,8 @@ def run_cv(df, y, models, df_value, groups, include_zero_end_train=False, predic
 
         final_avg.append(avg)
         final_std.append(std)
+
+    pd.DataFrame(folds_to_save).to_csv("Output_files/folds.csv", index=False)
 
     for m_name in models:
         m_folds = [

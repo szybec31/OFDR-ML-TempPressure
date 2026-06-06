@@ -132,22 +132,25 @@ if __name__ == "__main__":
     argv = sys.argv
     argv.pop(0)
 
+    # Console Help Section / Also important for non-console people:
+    if len(argv) == 1 and argv[0] == "help":
+        print("If you run script first time use `setup`")
+        print("You may use also other (or multiple) options:") 
+        print("`prepare`, `p`")
+        print("`prepare_broken`, `pb`")
+        print("`run`, `run_temp`, `r`, `rt`")
+        print("`run_condition`, `rc`")
+        print("`ablations`, `ablations_temp`, `a`, `at`")
+        print("`ablations_condition`, `ac`")
+        print("`info`, `i`")
+        print("`setup`, `s`")
+        exit()
+
     if len(argv) == 0:
-        ### And if you run script first time use "setup"
+        # If you not using console argv, feel fres to changes argv below, you may use as many argv as you want
+        # Correct options are written above in console help section
         argv = ["prepare"]
-
-        ### You may use also other (or multiple) options:  
-        # "prepare", "p",
-        # "prepare_broken", "pb",
-        # "run", "run_temp", "r", "rt",
-        # "run_condition", "rc",
-        # "ablations", "ablations_temp", "a", "at",
-        # "ablations_condition", "ac",
-        # "info", "i",
-        # "setup", "s",
-
-        ### Also is possible to use argv in console, example
-        # python main.py prepare run
+        
 
 
 

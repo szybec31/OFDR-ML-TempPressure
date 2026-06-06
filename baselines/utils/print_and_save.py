@@ -38,7 +38,8 @@ def print_and_save(models, avg_results, std_results, info, file_name):
         row = {"Model": models[i]}
 
         for metric in avg.keys():
-            row[metric.upper()] = f"{avg[metric]:.3f} ({std[metric]:.3f})"
+            row[f"{metric.upper()}_avg"] = f"{avg[metric]:.3f}"
+            row[f"{metric.upper()}_std"] = f"{std[metric]:.3f}"
 
         rows.append(row)
 
