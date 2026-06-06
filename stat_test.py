@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import sys
 
 from scipy.stats import (
     shapiro,
@@ -275,19 +276,39 @@ def compare_models(
 # =========================================================
 
 if __name__ == "__main__":
+    argv = sys.argv
+    argv.pop(0)
+
+    ## Info for running from console
+    if len(argv) == 1 and argv[0] == "help":
+        print("Use 3 argv: ")
+        print("1st and 2nd argv must be values from [AN-BL, MO-LR, RF, POLY2-RIDGE, SVR-RBF]")
+        print("3rd argv must be values from [PRESSURE_MAE, PRESSURE_RMSE, PRESSURE_MAXAE, PRESSURE_R2, DT_MAE, DT_RMSE, DT_MAXAE, DT_R2]")
+        print("You may use lower or upper case..")
+        exit()
+
+    if len(argv) != 3:
+        ### If you running code without console you must to edit line below to change function argv
+        argv = [
+            "MO-LR", # AN-BL, MO-LR, RF, POLY2-RIDGE, SVR-RBF
+            "AN-BL", # AN-BL, MO-LR, RF, POLY2-RIDGE, SVR-RBF
+            "PRESSURE_MAE" # PRESSURE_MAE, PRESSURE_RMSE, PRESSURE_MAXAE, PRESSURE_R2, DT_MAE, DT_RMSE, DT_MAXAE, DT_R2,
+        ]
 
     model_A = {
-        "model": "MO-LR", # AN-BL, MO-LR, RF, POLY2-RIDGE, SVR-RBF
+        "model": argv[0].upper(), 
     }
 
     model_B = {
-        "model": "AN-BL", # AN-BL, MO-LR, RF, POLY2-RIDGE, SVR-RBF
+        "model": argv[1].upper(), 
     }
+
+    metric = argv[2].lower() 
 
     compare_models(
         csv_path="Output_files/folds.csv",
         model_a=model_A,
         model_b=model_B,
-        metric="PRESSURE_MAE".lower(), # PRESSURE_MAE, PRESSURE_RMSE, PRESSURE_MAXAE, PRESSURE_R2, DT_MAE, DT_RMSE, DT_MAXAE, DT_R2,
+        metric=metric,
         local_only=False
     )
