@@ -8,6 +8,7 @@ from analyze_files import build_folder_summary
 from baselines.run_cv import run_cv, run_ablation_test
 from baselines.utils.build_groups import build_groups
 from baselines.utils.print_and_save import print_and_save, print_ablation_test
+from repeatability_analysis import compute_repeatability_metrics
 
 def main(type = "prepare", arg1 = False, arg2 = False):
 
@@ -114,6 +115,9 @@ def main(type = "prepare", arg1 = False, arg2 = False):
 
         print_ablation_test(ablation_results,csv_path="Output_files/ablation_results.csv")
 
+    elif type in ["repeatability", "rep", "rd"]:
+        compute_repeatability_metrics()
+
     elif type in ["info", "i"]:
         output_dir = 'Output_files'
         df = pd.read_csv(os.path.join(output_dir, 'paired_features.csv'))
@@ -142,6 +146,7 @@ if __name__ == "__main__":
         print("`run_condition`, `rc`")
         print("`ablations`, `ablations_temp`, `a`, `at`")
         print("`ablations_condition`, `ac`")
+        print("`repeatability`, `rep`, `rd`")
         print("`info`, `i`")
         print("`setup`, `s`")
         exit()
@@ -172,6 +177,8 @@ if __name__ == "__main__":
                 main("a", False)
             elif arg in ["ablations_condition", "ac"]:
                 main("a", True)
+            elif arg in ["repeatability", "rep", "rd"]:
+                main("repeatability")
             else:
                 main(arg)
     
