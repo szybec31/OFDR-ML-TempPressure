@@ -303,7 +303,26 @@ if __name__ == "__main__":
         "model": argv[1].upper(), 
     }
 
-    metric = argv[2].lower() 
+    metric_aliases = {
+        "pressure_mae": "pressure_mae",
+        "pressure_rmse": "pressure_rmse",
+        "pressure_maxae": "pressure_maxae",
+        "pressure_r2": "pressure_r2",
+        "dt_mae": "dT_mae",
+        "dt_rmse": "dT_rmse",
+        "dt_maxae": "dT_maxae",
+        "dt_r2": "dT_r2",
+    }
+
+    metric_arg = argv[2].lower()
+
+    if metric_arg not in metric_aliases:
+        raise ValueError(
+            f"Unknown metric: {argv[2]}. "
+            f"Allowed metrics: {list(metric_aliases.keys())}"
+        )
+
+    metric = metric_aliases[metric_arg]
 
     compare_models(
         csv_path="Output_files/folds.csv",
