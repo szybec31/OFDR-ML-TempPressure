@@ -227,4 +227,3 @@ def compute_repeatability_metrics(
 
 if __name__ == "__main__":
     compute_repeatability_metrics()
-    

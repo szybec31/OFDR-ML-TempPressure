@@ -32,7 +32,8 @@ def main(type = "prepare", arg1 = False, arg2 = False):
         df_summary.to_csv(os.path.join(output_dir, 'training_dataset.csv' if not broken else 'training_dataset_broken.csv'), index=False)
 
         df_base_for_training = df_summary[["series_id", "pressure", "dT", "Tp", "mu_Y", "mu_X", "std_Y", "std_X",
-                                           "irq_Y", "irq_X", "diff_XY", "mean_XY",  "is_temp_calibration", "is_pressure_calibration",
+                                           "irq_Y", "irq_X", "diff_XY", "mean_XY", "Xinter", "Pdir",
+                                           "is_temp_calibration", "is_pressure_calibration",
                                            "is_joint_regression", "is_repeatability_test", "low_quality"]]
         df_base_for_training.to_csv(os.path.join(output_dir, 'paired_features.csv' if not broken else 'paired_features_broken.csv'), index=False)
 
@@ -79,9 +80,11 @@ def main(type = "prepare", arg1 = False, arg2 = False):
 
         feat_4 = ["mu_X", "mu_Y", "std_X", "std_Y"]
         feat_8 = ["mu_X", "mu_Y", "std_X", "std_Y", "irq_X", "irq_Y", "diff_XY", "mean_XY"]
+        feat_10 = ["mu_X", "mu_Y", "std_X", "std_Y", "irq_X", "irq_Y", "diff_XY", "mean_XY", "Xinter", "Pdir"]
 
         ablation_results["A1_4_Features"] = run_ablation_test("4 Features", df_clean, feat_4, groups)
         ablation_results["A1_8_Features"] = run_ablation_test("8 Features", df_clean, feat_8, groups)
+        ablation_results["A1_10_Features_Xinter_Pdir"] = run_ablation_test("10 Features + Xinter/Pdir", df_clean, feat_10, groups)
 
         # Ablacja 2: Jeden kanał vs Dwa kanały
         feat_x = ["mu_X", "std_X", "irq_X"]

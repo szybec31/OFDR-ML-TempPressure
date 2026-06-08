@@ -91,6 +91,41 @@ def build_folder_summary(df_meta):
     df["diff_XY"] = df["mu_X"] - df["mu_Y"]
     df["mean_XY"] = (df["mu_X"] + df["mu_Y"]) / 2
 
+    # Interaction feature required by the extended feature engineering task.
+    # It approximates cross-sensitivity between the two polarization channels.
+    df["Xinter"] = df["mu_X"] * df["mu_Y"]
+
+    # Pressure direction feature:
+    # Pdir = sign(P_t - P_{t-1}) computed within each temperature series.
+    # zero_start is treated as the beginning of the cycle, pressure points
+    # are sorted by pressure, and zero_end is placed at the end to represent
+    # the return-to-zero phase.
+    df["_point_order"] = np.select(
+        [
+            (df["is_temp_calibration"] == True) & (df["is_repeatability_test"] == False),
+            df["is_repeatability_test"] == True,
+        ],
+        [
+            0,  # zero_start
+            2,  # zero_end
+        ],
+        default=1,  # pressure_point
+    )
+
+    df = df.sort_values(
+        ["series_id", "dT", "_point_order", "pressure"]
+    ).reset_index(drop=True)
+
+    df["Pdir"] = (
+        df.groupby(["series_id", "dT"])["pressure"]
+        .diff()
+        .fillna(0)
+        .apply(np.sign)
+        .astype(int)
+    )
+
+    df = df.drop(columns=["_point_order"])
+
     return df
 
 def detect_channel_swap(df_summary):
