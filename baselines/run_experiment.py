@@ -6,6 +6,7 @@ from .models.physical_model import train_physical_model
 from .models.linear import train_linear
 from .models.poly2_ridge import train_poly2_ridge
 from .models.svr_rbf import train_svr_rbf
+from .models.nystroem_svr import train_nystroem_svr
 from .models.randomforest import train_random_forest
 
 def joint_score(y_true, y_pred):
@@ -53,6 +54,12 @@ def run_experiment(X_train, y_train, X_test, y_test, models, include_zero_end_tr
             "svr__estimator__epsilon": [0.01, 0.05, 0.1],
             "svr__estimator__gamma": ["scale", 0.1, 1]
         },
+        "NYSTROEM-SVR": {
+            "nystroem__n_components": [100, 300, 500],
+            "nystroem__gamma": [0.01, 0.1, 1],
+            "svr__estimator__C": [1, 10],
+            "svr__estimator__epsilon": [0.01, 0.05],
+        },
         "RF": {
             "n_estimators": [300],
             "max_depth": [3, 5, None],
@@ -82,6 +89,9 @@ def run_experiment(X_train, y_train, X_test, y_test, models, include_zero_end_tr
             elif model_name == "SVR-RBF":
                 X_train_local, y_train_local = filter_dataset(X_train_local, y_train_local, "is_joint_regression", True)
                 base = train_svr_rbf(X_train_local[ml_features], y_train_local, {})
+            elif model_name == "NYSTROEM-SVR":
+                X_train_local, y_train_local = filter_dataset(X_train_local, y_train_local, "is_joint_regression", True)
+                base = train_nystroem_svr(X_train_local[ml_features], y_train_local, {})
             elif model_name == "RF":
                 X_train_local, y_train_local = filter_dataset(X_train_local, y_train_local, "is_joint_regression", True)
                 base = train_random_forest(X_train_local[ml_features], y_train_local, {})
