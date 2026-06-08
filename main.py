@@ -10,6 +10,7 @@ from baselines.utils.build_groups import build_groups
 from baselines.utils.print_and_save import print_and_save, print_ablation_test
 from repeatability_analysis import compute_repeatability_metrics
 from validation_diagnostics import run_validation_diagnostics
+from model_gain import compute_model_gain
 
 def main(type = "prepare", arg1 = False, arg2 = False):
 
@@ -125,6 +126,9 @@ def main(type = "prepare", arg1 = False, arg2 = False):
     elif type in ["validation_diagnostics", "valdiag", "vd"]:
         run_validation_diagnostics()
 
+    elif type in ["model_gain", "gain", "g"]:
+        compute_model_gain()
+
     elif type in ["info", "i"]:
         output_dir = 'Output_files'
         df = pd.read_csv(os.path.join(output_dir, 'paired_features.csv'))
@@ -155,6 +159,7 @@ if __name__ == "__main__":
         print("`ablations_condition`, `ac`")
         print("`repeatability`, `rep`, `rd`")
         print("`validation_diagnostics`, `valdiag`, `vd`")
+        print("`model_gain`, `gain`, `g`")
         print("`info`, `i`")
         print("`setup`, `s`")
         exit()
@@ -189,6 +194,8 @@ if __name__ == "__main__":
                 main("repeatability")
             elif arg in ["validation_diagnostics", "valdiag", "vd"]:
                 main("validation_diagnostics")
+            elif arg in ["model_gain", "gain", "g"]:
+                main("model_gain")
             else:
                 main(arg)
     
