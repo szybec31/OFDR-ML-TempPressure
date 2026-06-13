@@ -19,6 +19,7 @@ MODEL_ORDER = [
     "RF",
     "HGBR",
     "GBR",
+    "XGBOOST"
 ]
 
 METRICS = {
