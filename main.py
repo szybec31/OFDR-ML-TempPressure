@@ -53,7 +53,7 @@ def main(type = "prepare", arg1 = False, arg2 = False):
         groups = build_groups(df, leave_one_condition_out)
 
         features = ["mu_Y", "mu_X", "std_Y", "std_X", "irq_Y", "irq_X"]
-        models = ["AN-BL", "MO-LR", "RF", "POLY2-RIDGE", "SVR-RBF", "NYSTROEM-SVR"]
+        models = ["AN-BL", "MO-LR", "RF", "POLY2-RIDGE", "SVR-RBF", "NYSTROEM-SVR", "HGBR", "GPR", "KRR-RBF", "GBR"]
         avg_results, std_results, avg_results_wo_f1, std_results_wo_f1, fold_to_remove = run_cv(
             df=df,
             y=y,

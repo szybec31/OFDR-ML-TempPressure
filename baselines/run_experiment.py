@@ -8,6 +8,10 @@ from .models.poly2_ridge import train_poly2_ridge
 from .models.svr_rbf import train_svr_rbf
 from .models.nystroem_svr import train_nystroem_svr
 from .models.randomforest import train_random_forest
+from .models.hist_gradient_boosting import train_hist_gradient_boosting
+from .models.gaussian_process import train_gaussian_process
+from .models.kernel_ridge import train_kernel_ridge
+from .models.gradient_boosting import train_gradient_boosting
 
 def joint_score(y_true, y_pred):
 
@@ -65,6 +69,23 @@ def run_experiment(X_train, y_train, X_test, y_test, models, include_zero_end_tr
             "max_depth": [3, 5, None],
             "min_samples_leaf": [1, 2],
             "max_features": ["sqrt", 0.8],
+        },
+        "HGBR": {
+            "hgb__estimator__learning_rate": [0.03, 0.1],
+            "hgb__estimator__max_leaf_nodes": [15, 31],
+            "hgb__estimator__l2_regularization": [0.0, 0.1],
+        },
+        "GPR": {
+            "gpr__alpha": [1e-6, 1e-4, 1e-2],
+        },
+        "KRR-RBF": {
+            "krr__alpha": [0.01, 0.1, 1.0],
+            "krr__gamma": [0.01, 0.1, 1.0],
+        },
+        "GBR": {
+            "gbr__estimator__n_estimators": [100, 300],
+            "gbr__estimator__learning_rate": [0.03, 0.1],
+            "gbr__estimator__max_depth": [2, 3],
         }
     }
 
@@ -95,6 +116,21 @@ def run_experiment(X_train, y_train, X_test, y_test, models, include_zero_end_tr
             elif model_name == "RF":
                 X_train_local, y_train_local = filter_dataset(X_train_local, y_train_local, "is_joint_regression", True)
                 base = train_random_forest(X_train_local[ml_features], y_train_local, {})
+            elif model_name == "HGBR":
+                X_train_local, y_train_local = filter_dataset(X_train_local, y_train_local, "is_joint_regression", True)
+                base = train_hist_gradient_boosting(X_train_local[ml_features], y_train_local, {})
+
+            elif model_name == "GPR":
+                X_train_local, y_train_local = filter_dataset(X_train_local, y_train_local, "is_joint_regression", True)
+                base = train_gaussian_process(X_train_local[ml_features], y_train_local, {})
+
+            elif model_name == "KRR-RBF":
+                X_train_local, y_train_local = filter_dataset(X_train_local, y_train_local, "is_joint_regression", True)
+                base = train_kernel_ridge(X_train_local[ml_features], y_train_local, {})
+
+            elif model_name == "GBR":
+                X_train_local, y_train_local = filter_dataset(X_train_local, y_train_local, "is_joint_regression", True)
+                base = train_gradient_boosting(X_train_local[ml_features], y_train_local, {})
 
             inner_cv = GroupKFold(n_splits=3)
             joint_scorer = make_scorer(joint_score, greater_is_better=True)
