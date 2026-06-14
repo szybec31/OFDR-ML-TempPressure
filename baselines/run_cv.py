@@ -3,6 +3,7 @@ import pandas as pd
 from sklearn.model_selection import LeaveOneGroupOut
 from .run_experiment import run_experiment
 from .utils.metrics import evaluate
+from collections import Counter
 
 
 def run_cv(df, y, models, df_value, groups, include_zero_end_train=False, prediction_file=False):
@@ -125,6 +126,9 @@ def run_cv(df, y, models, df_value, groups, include_zero_end_train=False, predic
         for k in m_folds[0]:
             if k.endswith("_r2"):
                 avg[k] = np.nan
+                std[k] = 0.0
+            elif k == "params":
+                avg[k] = str(Counter(values))
                 std[k] = 0.0
             else:
                 values = [f[k] for f in m_folds]
