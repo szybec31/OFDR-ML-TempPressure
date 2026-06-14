@@ -8,6 +8,9 @@ from analyze_files import build_folder_summary
 from baselines.run_cv import run_cv, run_ablation_test
 from baselines.utils.build_groups import build_groups
 from baselines.utils.print_and_save import print_and_save, print_ablation_test
+from repeatability_analysis import compute_repeatability_metrics
+from validation_diagnostics import run_validation_diagnostics
+from model_gain import compute_model_gain
 
 def main(type = "prepare", arg1 = False, arg2 = False):
 
@@ -30,7 +33,8 @@ def main(type = "prepare", arg1 = False, arg2 = False):
         df_summary.to_csv(os.path.join(output_dir, 'training_dataset.csv' if not broken else 'training_dataset_broken.csv'), index=False)
 
         df_base_for_training = df_summary[["series_id", "pressure", "dT", "Tp", "mu_Y", "mu_X", "std_Y", "std_X",
-                                           "irq_Y", "irq_X", "diff_XY", "mean_XY",  "is_temp_calibration", "is_pressure_calibration",
+                                           "irq_Y", "irq_X", "diff_XY", "mean_XY", "Xinter", "Pdir",
+                                           "is_temp_calibration", "is_pressure_calibration",
                                            "is_joint_regression", "is_repeatability_test", "low_quality"]]
         df_base_for_training.to_csv(os.path.join(output_dir, 'paired_features.csv' if not broken else 'paired_features_broken.csv'), index=False)
 
@@ -49,7 +53,7 @@ def main(type = "prepare", arg1 = False, arg2 = False):
         groups = build_groups(df, leave_one_condition_out)
 
         features = ["mu_Y", "mu_X", "std_Y", "std_X", "irq_Y", "irq_X"]
-        models = ["AN-BL", "MO-LR", "RF", "POLY2-RIDGE", "SVR-RBF"]
+        models = ["AN-BL", "MO-LR", "RF", "POLY2-RIDGE", "SVR-RBF", "NYSTROEM-SVR", "HGBR", "GPR", "KRR-RBF", "GBR", "XGBOOST"]
         avg_results, std_results, avg_results_wo_f1, std_results_wo_f1, fold_to_remove = run_cv(
             df=df,
             y=y,
@@ -77,9 +81,11 @@ def main(type = "prepare", arg1 = False, arg2 = False):
 
         feat_4 = ["mu_X", "mu_Y", "std_X", "std_Y"]
         feat_8 = ["mu_X", "mu_Y", "std_X", "std_Y", "irq_X", "irq_Y", "diff_XY", "mean_XY"]
+        feat_10 = ["mu_X", "mu_Y", "std_X", "std_Y", "irq_X", "irq_Y", "diff_XY", "mean_XY", "Xinter", "Pdir"]
 
         ablation_results["A1_4_Features"] = run_ablation_test("4 Features", df_clean, feat_4, groups)
         ablation_results["A1_8_Features"] = run_ablation_test("8 Features", df_clean, feat_8, groups)
+        ablation_results["A1_10_Features_Xinter_Pdir"] = run_ablation_test("10 Features + Xinter/Pdir", df_clean, feat_10, groups)
 
         # Ablacja 2: Jeden kanał vs Dwa kanały
         feat_x = ["mu_X", "std_X", "irq_X"]
@@ -114,6 +120,15 @@ def main(type = "prepare", arg1 = False, arg2 = False):
 
         print_ablation_test(ablation_results,csv_path="Output_files/ablation_results.csv")
 
+    elif type in ["repeatability", "rep", "rd"]:
+        compute_repeatability_metrics()
+
+    elif type in ["validation_diagnostics", "valdiag", "vd"]:
+        run_validation_diagnostics()
+
+    elif type in ["model_gain", "gain", "g"]:
+        compute_model_gain()
+
     elif type in ["info", "i"]:
         output_dir = 'Output_files'
         df = pd.read_csv(os.path.join(output_dir, 'paired_features.csv'))
@@ -142,6 +157,9 @@ if __name__ == "__main__":
         print("`run_condition`, `rc`")
         print("`ablations`, `ablations_temp`, `a`, `at`")
         print("`ablations_condition`, `ac`")
+        print("`repeatability`, `rep`, `rd`")
+        print("`validation_diagnostics`, `valdiag`, `vd`")
+        print("`model_gain`, `gain`, `g`")
         print("`info`, `i`")
         print("`setup`, `s`")
         exit()
@@ -172,6 +190,12 @@ if __name__ == "__main__":
                 main("a", False)
             elif arg in ["ablations_condition", "ac"]:
                 main("a", True)
+            elif arg in ["repeatability", "rep", "rd"]:
+                main("repeatability")
+            elif arg in ["validation_diagnostics", "valdiag", "vd"]:
+                main("validation_diagnostics")
+            elif arg in ["model_gain", "gain", "g"]:
+                main("model_gain")
             else:
                 main(arg)
     

@@ -1,314 +1,290 @@
-import pandas as pd
-import numpy as np
 import sys
+import os
+import numpy as np
+import pandas as pd
 
-from scipy.stats import (
-    shapiro,
-    ttest_rel,
-    wilcoxon
-)
+from scipy.stats import wilcoxon
 
-# =========================================================
-# KONFIGURACJA
-# =========================================================
 
-CSV_PATH = "results.csv"
 ALPHA = 0.05
+DEFAULT_CSV_PATH = "Output_files/folds.csv"
+DEFAULT_OUTPUT_PATH = "Output_files/wilcoxon_results.csv"
 
-# Dostępne metryki:
-# f1_micro
-# f1_macro
-# b1
-# recall_micro
-# hamming
-# avg_labels_true
-# avg_labels_pred
+BASELINE_MODEL = "AN-BL"
+
+DEFAULT_METRICS = [
+    "pressure_rmse",
+    "dT_rmse",
+]
 
 
-# =========================================================
-# WCZYTANIE DANYCH
-# =========================================================
+METRIC_ALIASES = {
+    "pressure_mae": "pressure_mae",
+    "pressure_rmse": "pressure_rmse",
+    "pressure_maxae": "pressure_maxae",
+    "pressure_r2": "pressure_r2",
+    "dt_mae": "dT_mae",
+    "dt_rmse": "dT_rmse",
+    "dt_maxae": "dT_maxae",
+    "dt_r2": "dT_r2",
+}
 
-def load_results(csv_path: str, local_only: bool = False) -> pd.DataFrame:
+
+def normalize_metric(metric_arg: str) -> str:
+    metric_key = metric_arg.lower()
+
+    if metric_key not in METRIC_ALIASES:
+        raise ValueError(
+            f"Unknown metric: {metric_arg}. "
+            f"Allowed metrics: {list(METRIC_ALIASES.keys())}"
+        )
+
+    return METRIC_ALIASES[metric_key]
+
+
+def load_results(csv_path: str, local_only: bool = True) -> pd.DataFrame:
     df = pd.read_csv(csv_path)
+
     if local_only:
-        return df[df["local"]]
+        if "local" not in df.columns:
+            raise ValueError("Column 'local' not found in folds.csv.")
+
+        df = df[df["local"] == True].copy()
+
     return df
 
 
-# =========================================================
-# WYBÓR MODELU
-# =========================================================
+def select_model(df: pd.DataFrame, model_name: str) -> pd.DataFrame:
+    selected = df[df["model"] == model_name].copy()
 
-def select_model(
-    df: pd.DataFrame,
-    model_config: dict
-) -> pd.DataFrame:
+    if selected.empty:
+        raise ValueError(f"Model not found in folds.csv: {model_name}")
 
-    filtered = df.copy()
+    return selected.sort_values("fold")
 
-    for key, value in model_config.items():
-        filtered = filtered[filtered[key] == value]
-
-    return filtered.sort_values("fold")
-
-
-# =========================================================
-# PRZYGOTOWANIE PAR
-# =========================================================
 
 def prepare_paired_samples(
     df_a: pd.DataFrame,
     df_b: pd.DataFrame,
     metric: str
 ):
-
     merged = pd.merge(
         df_a[["fold", metric]],
         df_b[["fold", metric]],
         on="fold",
-        suffixes=("_A", "_B")
+        suffixes=("_a", "_b"),
     )
 
-    if len(merged) == 0:
-        raise ValueError(
-            f"Oczekiwano X foldów, znaleziono {len(merged)}"
-        )
+    if merged.empty:
+        raise ValueError("No shared folds found between compared models.")
 
-    scores_a = merged[f"{metric}_A"].values
-    scores_b = merged[f"{metric}_B"].values
+    scores_a = merged[f"{metric}_a"].to_numpy()
+    scores_b = merged[f"{metric}_b"].to_numpy()
 
-    return scores_a, scores_b
+    return merged, scores_a, scores_b
 
 
-# =========================================================
-# TEST NORMALNOŚCI
-# =========================================================
-
-def check_normality(
-    scores_a,
-    scores_b
-):
-
+def run_wilcoxon(scores_a, scores_b):
     differences = scores_a - scores_b
 
-    stat, p_value = shapiro(differences)
+    if np.allclose(differences, 0):
+        return {
+            "statistic": 0.0,
+            "p_value": 1.0,
+        }
+
+    statistic, p_value = wilcoxon(scores_a, scores_b)
 
     return {
-        "statistic": stat,
+        "statistic": statistic,
         "p_value": p_value,
-        "normal": p_value > ALPHA
     }
 
-
-# =========================================================
-# EFFECT SIZE
-# =========================================================
-
-def cohens_d_paired(scores_a, scores_b):
-
-    diff = scores_a - scores_b
-
-    mean_diff = np.mean(diff)
-    std_diff = np.std(diff, ddof=1)
-
-    return mean_diff / std_diff
-
-
-# =========================================================
-# TEST STATYSTYCZNY
-# =========================================================
-
-def run_statistical_test(
-    scores_a,
-    scores_b
-):
-
-    normality = check_normality(scores_a, scores_b)
-
-    if normality["normal"]:
-
-        test_name = "Paired t-test"
-
-        stat, p_value = ttest_rel(scores_a, scores_b)
-
-        effect_size = cohens_d_paired(scores_a, scores_b)
-
-    else:
-
-        test_name = "Wilcoxon signed-rank test"
-
-        stat, p_value = wilcoxon(scores_a, scores_b)
-
-        effect_size = None
-
-    return {
-        "test": test_name,
-        "statistic": stat,
-        "p_value": p_value,
-        "effect_size": effect_size,
-        "normality": normality
-    }
-
-
-# =========================================================
-# RAPORT
-# =========================================================
-
-def print_report(
-    model_a,
-    model_b,
-    metric,
-    scores_a,
-    scores_b,
-    results
-):
-
-    print("\n" + "=" * 60)
-    print("PORÓWNANIE MODELI")
-    print("=" * 60)
-
-    print("\nMODEL A")
-    for k, v in model_a.items():
-        print(f"{k}: {v}")
-
-    print("\nMODEL B")
-    for k, v in model_b.items():
-        print(f"{k}: {v}")
-
-    print("\nMETRYKA:", metric)
-
-    print("\nWYNIKI FOLDÓW")
-    for i, (a, b) in enumerate(zip(scores_a, scores_b), start=1):
-        print(f"Fold {i}: A={a:.4f} | B={b:.4f}")
-
-    print("\n" + "-" * 60)
-    print("TEST NORMALNOŚCI (Shapiro-Wilk)")
-    print("-" * 60)
-
-    print(
-        f"Statistic = {results['normality']['statistic']:.6f}"
-    )
-    print(
-        f"p-value   = {results['normality']['p_value']:.6f}"
-    )
-
-    if results["normality"]["normal"]:
-        print("Wniosek: rozkład różnic jest normalny")
-    else:
-        print("Wniosek: brak normalności rozkładu różnic")
-
-    print("\n" + "-" * 60)
-    print("TEST STATYSTYCZNY")
-    print("-" * 60)
-
-    print(f"Test: {results['test']}")
-    print(f"Statistic = {results['statistic']:.6f}")
-    print(f"p-value   = {results['p_value']:.6f}")
-
-    if results["effect_size"] is not None:
-        print(f"Cohen's d = {results['effect_size']:.6f}")
-
-    print("\n" + "-" * 60)
-
-    if results["p_value"] < ALPHA:
-        print(
-            f"WYNIK ISTOTNY STATYSTYCZNIE "
-            f"(p < {ALPHA})"
-        )
-    else:
-        print(
-            f"BRAK ISTOTNOŚCI STATYSTYCZNEJ "
-            f"(p >= {ALPHA})"
-        )
-
-    print("=" * 60)
-
-
-# =========================================================
-# GŁÓWNA FUNKCJA
-# =========================================================
 
 def compare_models(
-    csv_path,
-    model_a,
-    model_b,
-    metric,
-    local_only
+    df: pd.DataFrame,
+    model_a: str,
+    model_b: str,
+    metric: str,
 ):
-
-    df = load_results(csv_path, local_only)
-
     df_a = select_model(df, model_a)
     df_b = select_model(df, model_b)
 
-    if df_a.empty:
-        raise ValueError("Nie znaleziono Modelu A")
-
-    if df_b.empty:
-        raise ValueError("Nie znaleziono Modelu B")
-
-    scores_a, scores_b = prepare_paired_samples(
+    merged, scores_a, scores_b = prepare_paired_samples(
         df_a,
         df_b,
-        metric
-    )
-
-    results = run_statistical_test(
-        scores_a,
-        scores_b
-    )
-
-    print_report(
-        model_a,
-        model_b,
         metric,
-        scores_a,
-        scores_b,
-        results
     )
 
-    return results
+    test_result = run_wilcoxon(scores_a, scores_b)
+
+    mean_a = float(np.mean(scores_a))
+    std_a = float(np.std(scores_a, ddof=1))
+
+    mean_b = float(np.mean(scores_b))
+    std_b = float(np.std(scores_b, ddof=1))
+
+    mean_diff = mean_a - mean_b
+
+    if mean_a != 0:
+        relative_gain_percent = 100.0 * mean_diff / mean_a
+    else:
+        relative_gain_percent = np.nan
+
+    if mean_b < mean_a:
+        better_model = model_b
+    elif mean_b > mean_a:
+        better_model = model_a
+    else:
+        better_model = "tie"
+
+    return {
+        "model_a": model_a,
+        "model_b": model_b,
+        "metric": metric,
+        "n_folds": len(merged),
+        "model_a_mean": mean_a,
+        "model_a_std": std_a,
+        "model_b_mean": mean_b,
+        "model_b_std": std_b,
+        "mean_diff_a_minus_b": mean_diff,
+        "relative_gain_percent_b_vs_a": relative_gain_percent,
+        "better_model_by_mean": better_model,
+        "test": "Wilcoxon signed-rank test",
+        "statistic": float(test_result["statistic"]),
+        "p_value": float(test_result["p_value"]),
+        "significant_alpha_0_05": bool(test_result["p_value"] < ALPHA),
+    }
 
 
-# =========================================================
-# PRZYKŁAD UŻYCIA
-# =========================================================
+def run_all_wilcoxon(
+    csv_path: str = DEFAULT_CSV_PATH,
+    output_path: str = DEFAULT_OUTPUT_PATH,
+    local_only: bool = True,
+):
+    df = load_results(csv_path, local_only=local_only)
+
+    models = sorted(df["model"].unique().tolist())
+
+    if BASELINE_MODEL not in models:
+        raise ValueError(f"Baseline model not found: {BASELINE_MODEL}")
+
+    compared_models = [m for m in models if m != BASELINE_MODEL]
+
+    rows = []
+
+    for metric in DEFAULT_METRICS:
+        for model in compared_models:
+            row = compare_models(
+                df=df,
+                model_a=BASELINE_MODEL,
+                model_b=model,
+                metric=metric,
+            )
+            rows.append(row)
+
+    results_df = pd.DataFrame(rows)
+
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    results_df.to_csv(output_path, index=False)
+
+    print("\nWILCOXON TESTS VS BASELINE")
+    print("=" * 100)
+    print(f"Input file: {csv_path}")
+    print(f"Baseline: {BASELINE_MODEL}")
+    print(f"Local only: {local_only}")
+    print(f"Output file: {output_path}")
+    print("=" * 100)
+
+    display_cols = [
+        "metric",
+        "model_a",
+        "model_b",
+        "n_folds",
+        "model_a_mean",
+        "model_a_std",
+        "model_b_mean",
+        "model_b_std",
+        "relative_gain_percent_b_vs_a",
+        "p_value",
+        "significant_alpha_0_05",
+        "better_model_by_mean",
+    ]
+
+    print(results_df[display_cols].to_string(index=False))
+
+    return results_df
+
+
+def run_single_comparison(argv):
+    if len(argv) not in [3, 4]:
+        raise ValueError(
+            "Use: python stat_test.py MODEL_A MODEL_B METRIC [local|full]\n"
+            "Example: python stat_test.py AN-BL MO-LR PRESSURE_RMSE local"
+        )
+
+    model_a = argv[0].upper()
+    model_b = argv[1].upper()
+    metric = normalize_metric(argv[2])
+
+    local_only = True
+    if len(argv) == 4:
+        mode = argv[3].lower()
+        if mode == "local":
+            local_only = True
+        elif mode == "full":
+            local_only = False
+        else:
+            raise ValueError("Fourth argument must be 'local' or 'full'.")
+
+    df = load_results(DEFAULT_CSV_PATH, local_only=local_only)
+
+    result = compare_models(
+        df=df,
+        model_a=model_a,
+        model_b=model_b,
+        metric=metric,
+    )
+
+    print("\nWILCOXON MODEL COMPARISON")
+    print("=" * 80)
+    print(f"Input file: {DEFAULT_CSV_PATH}")
+    print(f"Local only: {local_only}")
+    print(f"Model A: {model_a}")
+    print(f"Model B: {model_b}")
+    print(f"Metric: {metric}")
+    print("-" * 80)
+
+    for key, value in result.items():
+        print(f"{key}: {value}")
+
+    return result
+
 
 if __name__ == "__main__":
-    argv = sys.argv
-    argv.pop(0)
+    argv = sys.argv[1:]
 
-    ## Info for running from console
-    if len(argv) == 1 and argv[0] == "help":
-        print("Use 3 argv: ")
-        print("1st and 2nd argv must be values from [AN-BL, MO-LR, RF, POLY2-RIDGE, SVR-RBF]")
-        print("3rd argv must be values from [PRESSURE_MAE, PRESSURE_RMSE, PRESSURE_MAXAE, PRESSURE_R2, DT_MAE, DT_RMSE, DT_MAXAE, DT_R2]")
-        print("You may use lower or upper case..")
+    if len(argv) == 1 and argv[0].lower() == "help":
+        print("Usage:")
+        print("  python stat_test.py all")
+        print("  python stat_test.py all_full")
+        print("  python stat_test.py MODEL_A MODEL_B METRIC [local|full]")
+        print("")
+        print("Examples:")
+        print("  python stat_test.py all")
+        print("  python stat_test.py all_full")
+        print("  python stat_test.py AN-BL MO-LR PRESSURE_RMSE local")
+        print("  python stat_test.py AN-BL POLY2-RIDGE DT_RMSE local")
         exit()
 
-    if len(argv) != 3:
-        ### If you running code without console you must to edit line below to change function argv
-        argv = [
-            "MO-LR", # AN-BL, MO-LR, RF, POLY2-RIDGE, SVR-RBF
-            "AN-BL", # AN-BL, MO-LR, RF, POLY2-RIDGE, SVR-RBF
-            "PRESSURE_MAE" # PRESSURE_MAE, PRESSURE_RMSE, PRESSURE_MAXAE, PRESSURE_R2, DT_MAE, DT_RMSE, DT_MAXAE, DT_R2,
-        ]
+    if len(argv) == 1 and argv[0].lower() == "all":
+        run_all_wilcoxon(local_only=True)
 
-    model_A = {
-        "model": argv[0].upper(), 
-    }
+    elif len(argv) == 1 and argv[0].lower() == "all_full":
+        run_all_wilcoxon(
+            output_path="Output_files/wilcoxon_results_all_folds.csv",
+            local_only=False,
+        )
 
-    model_B = {
-        "model": argv[1].upper(), 
-    }
-
-    metric = argv[2].lower() 
-
-    compare_models(
-        csv_path="Output_files/folds.csv",
-        model_a=model_A,
-        model_b=model_B,
-        metric=metric,
-        local_only=False
-    )
+    else:
+        run_single_comparison(argv)

@@ -118,27 +118,67 @@ def run_cv(df, y, models, df_value, groups, include_zero_end_train=False, predic
 
     folds_to_save = []
 
+    def aggregate_fold_metrics(m_folds):
+        avg = {}
+        std = {}
+
+        for k in m_folds[0]:
+            if k.endswith("_r2"):
+                avg[k] = np.nan
+                std[k] = 0.0
+            else:
+                values = [f[k] for f in m_folds]
+                avg[k] = np.nanmean(values)
+                std[k] = np.nanstd(values)
+
+        return avg, std
+
+    def compute_global_metrics(model_name, allowed_fold_ids=None):
+        if allowed_fold_ids is None:
+            y_true_parts = all_y_true
+            y_pred_parts = all_y_preds[model_name]
+        else:
+            y_true_parts = [
+                yt for yt, fid in zip(all_y_true, stored_fold_ids)
+                if fid in allowed_fold_ids
+            ]
+            y_pred_parts = [
+                yp for yp, fid in zip(all_y_preds[model_name], stored_fold_ids)
+                if fid in allowed_fold_ids
+            ]
+
+        y_true_global_df = pd.DataFrame(
+            np.vstack(y_true_parts),
+            columns=["pressure", "dT"]
+        )
+        y_pred_global = np.vstack(y_pred_parts)
+
+        return evaluate(y_true_global_df, y_pred_global)
+
+    def attach_global_r2(avg, std, global_metrics):
+        avg["pressure_r2"] = global_metrics["pressure_r2"]
+        avg["dT_r2"] = global_metrics["dT_r2"]
+        std["pressure_r2"] = 0.0
+        std["dT_r2"] = 0.0
+
     for m_name in models:
         m_folds = all_fold_results[m_name]
 
         for i, f in enumerate(m_folds):
+            fold_id = stored_fold_ids[i]
+
             row = {
                 "model": m_name,
-                "fold": i,
-                "local": not (i in fold_to_remove)
+                "fold": fold_id + 1,
+                "local": not (fold_id in fold_to_remove)
             }
             row.update(f)
             folds_to_save.append(row)
 
-        avg = {k: np.nanmean([f[k] for f in m_folds]) for k in m_folds[0]}
-        std = {k: np.nanstd([f[k] for f in m_folds]) for k in m_folds[0]}
+        avg, std = aggregate_fold_metrics(m_folds)
 
-        m_preds_stacked = np.vstack(all_y_preds[m_name])
-        global_metrics = evaluate(y_true_df, m_preds_stacked)
-
-        avg["dT_r2"] = global_metrics["dT_r2"]
-        avg["pressure_r2"] = global_metrics["pressure_r2"]
-        std["dT_r2"] = 0.0
+        global_metrics = compute_global_metrics(m_name)
+        attach_global_r2(avg, std, global_metrics)
 
         final_avg.append(avg)
         final_std.append(std)
@@ -151,15 +191,15 @@ def run_cv(df, y, models, df_value, groups, include_zero_end_train=False, predic
             if fid not in fold_to_remove
         ]
 
-        avg = {k: np.nanmean([f[k] for f in m_folds]) for k in m_folds[0]}
-        std = {k: np.nanstd([f[k] for f in m_folds]) for k in m_folds[0]}
+        avg, std = aggregate_fold_metrics(m_folds)
 
-        m_preds_stacked = np.vstack(all_y_preds[m_name])
-        global_metrics = evaluate(y_true_df, m_preds_stacked)
+        valid_fold_ids = [
+            fid for fid in stored_fold_ids
+            if fid not in fold_to_remove
+        ]
 
-        avg["dT_r2"] = global_metrics["dT_r2"]
-        avg["pressure_r2"] = global_metrics["pressure_r2"]
-        std["dT_r2"] = 0.0
+        global_metrics = compute_global_metrics(m_name, valid_fold_ids)
+        attach_global_r2(avg, std, global_metrics)
 
         final_avg_without_fold_1.append(avg)
         final_std_without_fold_1.append(std)
