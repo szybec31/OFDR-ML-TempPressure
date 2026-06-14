@@ -5,4 +5,5 @@ numpy
 scipy
 scikit-learn
 tqdm
-seabornxgboost==3.2.0
+seaborn
+xgboost==3.2.0
