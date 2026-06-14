@@ -167,8 +167,8 @@ if __name__ == "__main__":
     if len(argv) == 0:
         # If you not using console argv, feel fres to changes argv below, you may use as many argv as you want
         # Correct options are written above in console help section
-        argv = ["prepare"]
-        
+        argv = ["run"]
+
 
 
 
