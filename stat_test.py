@@ -264,6 +264,9 @@ def run_single_comparison(argv):
 if __name__ == "__main__":
     argv = sys.argv[1:]
 
+    if len(argv) == 0:
+        argv = ["all"]
+
     if len(argv) == 1 and argv[0].lower() == "help":
         print("Usage:")
         print("  python stat_test.py all")
