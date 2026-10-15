@@ -8,12 +8,6 @@ from .models.poly2_ridge import train_poly2_ridge
 from .models.svr_rbf import train_svr_rbf
 from .models.nystroem_svr import train_nystroem_svr
 from .models.randomforest import train_random_forest
-from .models.hist_gradient_boosting import train_hist_gradient_boosting
-from .models.gaussian_process import train_gaussian_process
-from .models.kernel_ridge import train_kernel_ridge
-from .models.gradient_boosting import train_gradient_boosting
-from .models.xgboost_model import train_xgboost
-from .models.mlp import train_mlp
 import time
 
 def joint_score(y_true, y_pred):
@@ -76,57 +70,6 @@ def run_experiment(X_train, y_train, X_test, y_test, models, include_zero_end_tr
             "min_samples_leaf": [1, 2, 4],
             "min_samples_split": [2, 5],
             "max_features": ["sqrt", "log2", 0.8],
-        },
-        "HGBR": {
-            "hgb__estimator__learning_rate": [0.01, 0.03, 0.1, 0.2],
-            "hgb__estimator__max_leaf_nodes": [15, 31, 63],
-            "hgb__estimator__l2_regularization": [0.0, 0.1, 1.0, 10.0],
-            "hgb__estimator__min_samples_leaf": [10, 20, 40],
-        },
-        "GPR": {
-            "gpr__alpha": [1e-10, 1e-6, 1e-4, 1e-2, 1e-1],
-            "gpr__n_restarts_optimizer": [0, 3, 5]
-        },
-        "KRR-RBF": {
-            "krr__alpha": [0.001, 0.01, 0.1, 1.0, 10.0],
-            "krr__gamma": ["scale", 0.001, 0.01, 0.1, 1.0],
-        },
-        "GBR": {
-            "gbr__estimator__n_estimators": [100, 300, 500],
-            "gbr__estimator__learning_rate": [0.01, 0.03, 0.1],
-            "gbr__estimator__max_depth": [2, 3, 5],
-            "gbr__estimator__subsample": [0.7, 0.8, 1.0],
-        },
-        "XGBOOST": {
-            "xgb__estimator__n_estimators": [100, 200, 300, 500],
-            "xgb__estimator__max_depth": [2, 3, 5, 7],
-            "xgb__estimator__learning_rate": [0.01, 0.03, 0.1, 0.2],
-            "xgb__estimator__subsample": [0.6, 0.8, 1.0],
-            "xgb__estimator__colsample_bytree": [0.6, 0.8, 1.0],
-        },
-        "MLP": {
-            "mlp__estimator__hidden_layer_sizes": [
-                (16,),
-                (32,),
-                (32,16),
-                (64,32)
-            ],
-
-            "mlp__estimator__activation": [
-                "relu",
-                "tanh"
-            ],
-
-            "mlp__estimator__alpha": [
-                1e-4,
-                1e-3,
-                1e-2
-            ],
-
-            "mlp__estimator__learning_rate_init": [
-                1e-3,
-                1e-2
-            ]
         }
     }
 
@@ -158,24 +101,6 @@ def run_experiment(X_train, y_train, X_test, y_test, models, include_zero_end_tr
             elif model_name == "RF":
                 X_train_local, y_train_local = filter_dataset(X_train_local, y_train_local, "is_joint_regression", True)
                 base = train_random_forest(X_train_local[ml_features], y_train_local, {})
-            elif model_name == "HGBR":
-                X_train_local, y_train_local = filter_dataset(X_train_local, y_train_local, "is_joint_regression", True)
-                base = train_hist_gradient_boosting(X_train_local[ml_features], y_train_local, {})
-            elif model_name == "GPR":
-                X_train_local, y_train_local = filter_dataset(X_train_local, y_train_local, "is_joint_regression", True)
-                base = train_gaussian_process(X_train_local[ml_features], y_train_local, {})
-            elif model_name == "KRR-RBF":
-                X_train_local, y_train_local = filter_dataset(X_train_local, y_train_local, "is_joint_regression", True)
-                base = train_kernel_ridge(X_train_local[ml_features], y_train_local, {})
-            elif model_name == "GBR":
-                X_train_local, y_train_local = filter_dataset(X_train_local, y_train_local, "is_joint_regression", True)
-                base = train_gradient_boosting(X_train_local[ml_features], y_train_local, {})
-            elif model_name == "XGBOOST":
-                X_train_local, y_train_local = filter_dataset(X_train_local, y_train_local, "is_joint_regression", True)
-                base = train_xgboost(X_train_local[ml_features], y_train_local, {})
-            elif model_name == "MLP":
-                X_train_local, y_train_local = filter_dataset(X_train_local, y_train_local, "is_joint_regression", True)
-                base = train_mlp(X_train_local[ml_features], y_train_local, {})
 
 
             inner_cv = GroupKFold(n_splits=3)
