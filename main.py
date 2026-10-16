@@ -13,7 +13,7 @@ OUTPUT_DIR = "Output_files"
 PAIRED_COLUMNS = [
     "sample_id", "ref", "series_id", "rep_idx", "point_type",
     "pressure", "dT", "Tp",
-    "mu_Y", "mu_X", "std_Y", "std_X", "iqr_Y", "iqr_X", "diff_XY", "mean_XY", "Xinter",
+    "mu_Y", "mu_X", "std_Y", "std_X", "iqr_Y", "iqr_X", "m", "d", "Xinter",
     "is_temp_calibration", "is_pressure_calibration", "is_joint_regression", "is_repeatability_test",
     "low_quality",
 ]

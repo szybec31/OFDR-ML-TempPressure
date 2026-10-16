@@ -175,8 +175,8 @@ def signal_drift(df):
             "sample_id": e["sample_id"], "series_id": e["series_id"], "dT": e["dT"],
             "rep_idx": e["rep_idx"],
             "delta_mu_X": dx, "delta_mu_Y": dy,
-            "delta_m": (dx + dy) / 2,       # składowa wspólna (mean_XY)
-            "delta_d": dx - dy,             # składowa różnicowa (diff_XY)
+            "delta_m": (dx + dy) / 2,       # składowa wspólna (m)
+            "delta_d": dx - dy,             # składowa różnicowa (d)
             "delta_mu_norm": np.hypot(dx, dy),
         })
     return pd.DataFrame(rows)

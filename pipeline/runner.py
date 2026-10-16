@@ -37,7 +37,7 @@ DEFAULTS = {
     "blocks": None,               # tylko dla split = "block": lista prostokątów w (dT, p)
     "inner_cv": {"n_splits": 3, "group": "series_id"},
     "n_jobs": -1,
-    "features": ["mu_X", "mu_Y", "std_X", "std_Y", "iqr_X", "iqr_Y"],
+    "features": ["mu_X", "mu_Y", "m", "d", "std_X", "std_Y", "iqr_X", "iqr_Y"],
     "models": ["AN-BL", "MO-LR"],
     "baseline": "AN-BL",
     "grids": {},

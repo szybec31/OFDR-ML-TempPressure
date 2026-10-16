@@ -3,7 +3,7 @@
   "description": "Leave-one-condition-out (jedna kombinacja dT, p w teście). Test pomocniczy / interpolacyjny - train i test dzielą tę samą serię. Bez RF i NYSTROEM-SVR ze względu na czas (119 foldów).",
   "seed": 42,
   "split": "condition",
-  "features": ["mu_Y", "mu_X", "std_Y", "std_X", "iqr_Y", "iqr_X"],
+  "features": ["mu_Y", "mu_X", "m", "d", "std_Y", "std_X", "iqr_Y", "iqr_X"],
   "models": ["AN-BL", "AN-BL-NEAREST", "MO-LR", "POLY2-RIDGE", "SVR-RBF"],
   "baseline": "AN-BL"
 }

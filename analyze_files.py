@@ -89,8 +89,14 @@ def build_folder_summary(df_meta):
             print("Error:", e)
 
     df = pd.DataFrame(records)
-    df["diff_XY"] = df["mu_X"] - df["mu_Y"]
-    df["mean_XY"] = (df["mu_X"] + df["mu_Y"]) / 2
+    # składowa wspólna i różnicowa kanałów X, Y:
+    #   m = (mu_X + mu_Y) / 2  - niesie głównie temperaturę (obie osie ~ -1.4 GHz/°C)
+    #   d = mu_X - mu_Y        - niesie głównie ciśnienie (X ~ +0.7, Y ~ -1.9 GHz/MPa)
+    df["m"] = (df["mu_X"] + df["mu_Y"]) / 2
+    df["d"] = df["mu_X"] - df["mu_Y"]
+    # stare nazwy zostawione dla notebooków (01_preprocessing.ipynb)
+    df["mean_XY"] = df["m"]
+    df["diff_XY"] = df["d"]
 
     # Interaction feature required by the extended feature engineering task.
     # It approximates cross-sensitivity between the two polarization channels.

@@ -3,7 +3,7 @@
   "description": "Leave-one-pressure-level-out: w każdym foldzie testem jest jeden poziom ciśnienia we wszystkich temperaturach. Fold p=0 usuwa wszystkie rekordy kalibracji temperaturowej, więc AN-BL i AN-BL-NEAREST są tam N/A. Foldy p=0 i p=10 wymagają ekstrapolacji po ciśnieniu.",
   "seed": 42,
   "split": "pressure",
-  "features": ["mu_Y", "mu_X", "std_Y", "std_X", "iqr_Y", "iqr_X"],
+  "features": ["mu_Y", "mu_X", "m", "d", "std_Y", "std_X", "iqr_Y", "iqr_X"],
   "models": ["AN-BL", "AN-BL-NEAREST", "MO-LR", "POLY2-RIDGE", "SVR-RBF", "NYSTROEM-SVR", "RF"],
   "baseline": "AN-BL"
 }
