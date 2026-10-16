@@ -31,7 +31,8 @@
    python main.py run                                   # configs/main_temperature.json
    python main.py ablations                             # configs/ablations.json
    python main.py run_condition                         # configs/main_condition.json
-   python main.py sem1                                  # configs/sem1_full.json (all models from the semester 1 report)
+   python main.py run_pressure                          # configs/leave_pressure_out.json (leave-one-pressure-level-out)
+   python main.py run_block                             # configs/block_holdout.json (held-out regions of the T, p space)
    python main.py experiment configs/my_experiment.json # any config
    ```
    Several commands can be chained, e.g. `python main.py setup run ablations`. `python main.py help` lists all options.
@@ -39,6 +40,7 @@
    Each run creates `Output_files/runs/<date>_<name>/` with **all** results of that run
    (`Output_files/runs/LATEST.txt` points to the newest one):
    - `config.json`, `config_resolved.json`, `run_meta.json` (git commit, dirty flag, library versions, data hash),
+   - `results_per_fold.*` - results of every model in every fold,
    - `folds.csv`, `predictions.csv` (test predictions and out-of-fold predictions for `zero_end`), `fold_status.*`,
    - `results_table.*` - main table, mean (std) over the common folds,
    - `summary_common_folds.*`, `summary_all_valid_folds.*`, `pooled_metrics.*` (pooled R^2),
@@ -71,7 +73,7 @@ Python files:
 - `pipeline/` - experiment pipeline:
   - `runner.py` - config loading, run directory, metadata, variants
   - `cv.py` - outer leave-one-group-out loop and inner GridSearchCV (GroupKFold by series)
-  - `splits.py` - split schemes: `temperature`, `series`, `pressure`, `condition`
+  - `splits.py` - split schemes: `temperature`, `series`, `pressure`, `condition` (leave-one-group-out) and `block` (held-out rectangles in the T, p space, defined in the config)
   - `models.py` - model registry (builders + hyperparameter grids)
   - `metrics.py` - MAE, RMSE, MaxAE, bias, R^2
   - `report.py` - all tables, statistical tests, gain G, repeatability, plots

@@ -26,9 +26,12 @@ CONFIG_ALIASES = {
     "rt": "configs/main_temperature.json",
     "run_condition": "configs/main_condition.json",
     "rc": "configs/main_condition.json",
+    "run_pressure": "configs/leave_pressure_out.json",
+    "rp": "configs/leave_pressure_out.json",
+    "run_block": "configs/block_holdout.json",
+    "rb": "configs/block_holdout.json",
     "ablations": "configs/ablations.json",
     "a": "configs/ablations.json",
-    "sem1": "configs/sem1_full.json",
 }
 
 
@@ -73,8 +76,9 @@ HELP = """Użycie: python main.py POLECENIE [POLECENIE ...]
   info, i                   liczności ról w paired_features.csv
   run, r, run_temp, rt      eksperyment główny: configs/main_temperature.json (leave-one-temperature-out)
   run_condition, rc         configs/main_condition.json (leave-one-condition-out, test pomocniczy)
+  run_pressure, rp          configs/leave_pressure_out.json (leave-one-pressure-level-out)
+  run_block, rb             configs/block_holdout.json (usunięcie fragmentów przestrzeni T, p)
   ablations, a              configs/ablations.json
-  sem1                      configs/sem1_full.json (wszystkie modele z raportu z semestru 1)
   experiment PLIK.json      dowolny plik konfiguracyjny
 
 Każdy eksperyment zapisuje komplet wyników w Output_files/runs/<data>_<nazwa>/

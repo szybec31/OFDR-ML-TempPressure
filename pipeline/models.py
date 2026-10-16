@@ -2,18 +2,12 @@
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
-from baselines.models.gaussian_process import build_gaussian_process
-from baselines.models.gradient_boosting import build_gradient_boosting
-from baselines.models.hist_gradient_boosting import build_hist_gradient_boosting
-from baselines.models.kernel_ridge import build_kernel_ridge
 from baselines.models.linear import build_linear
-from baselines.models.mlp import build_mlp
 from baselines.models.nystroem_svr import build_nystroem_svr
 from baselines.models.physical_model import PhysicalModel
 from baselines.models.poly2_ridge import build_poly2_ridge
 from baselines.models.randomforest import build_random_forest
 from baselines.models.svr_rbf import build_svr_rbf
-from baselines.models.xgboost_model import build_xgboost
 
 
 @dataclass
@@ -26,7 +20,7 @@ class ModelSpec:
     extra: dict = field(default_factory=dict)
 
 
-# Siatki = stan z końca semestru 1 (commit 2f4e5c7 "fix grid, add mlp").
+# Siatki = stan z końca semestru 1 (commit 2f4e5c7).
 MODEL_REGISTRY = {
     "AN-BL": ModelSpec(
         "AN-BL", lambda seed: PhysicalModel(pressure_calibration="strict"), kind="physical",
@@ -69,51 +63,6 @@ MODEL_REGISTRY = {
             "max_features": ["sqrt", "log2", 0.8],
         },
     ),
-    "HGBR": ModelSpec(
-        "HGBR", build_hist_gradient_boosting,
-        grid={
-            "hgb__estimator__learning_rate": [0.01, 0.03, 0.1, 0.2],
-            "hgb__estimator__max_leaf_nodes": [15, 31, 63],
-            "hgb__estimator__l2_regularization": [0.0, 0.1, 1.0, 10.0],
-            "hgb__estimator__min_samples_leaf": [10, 20, 40],
-        },
-    ),
-    "GPR": ModelSpec(
-        "GPR", build_gaussian_process,
-        grid={"gpr__alpha": [1e-10, 1e-6, 1e-4, 1e-2, 1e-1], "gpr__n_restarts_optimizer": [0, 3, 5]},
-    ),
-    "KRR-RBF": ModelSpec(
-        "KRR-RBF", build_kernel_ridge,
-        grid={"krr__alpha": [0.001, 0.01, 0.1, 1.0, 10.0], "krr__gamma": [0.001, 0.01, 0.1, 1.0]},
-    ),
-    "GBR": ModelSpec(
-        "GBR", build_gradient_boosting,
-        grid={
-            "gbr__estimator__n_estimators": [100, 300, 500],
-            "gbr__estimator__learning_rate": [0.01, 0.03, 0.1],
-            "gbr__estimator__max_depth": [2, 3, 5],
-            "gbr__estimator__subsample": [0.7, 0.8, 1.0],
-        },
-    ),
-    "XGBOOST": ModelSpec(
-        "XGBOOST", build_xgboost,
-        grid={
-            "xgb__estimator__n_estimators": [100, 200, 300, 500],
-            "xgb__estimator__max_depth": [2, 3, 5, 7],
-            "xgb__estimator__learning_rate": [0.01, 0.03, 0.1, 0.2],
-            "xgb__estimator__subsample": [0.6, 0.8, 1.0],
-            "xgb__estimator__colsample_bytree": [0.6, 0.8, 1.0],
-        },
-    ),
-    "MLP": ModelSpec(
-        "MLP", build_mlp,
-        grid={
-            "mlp__estimator__hidden_layer_sizes": [(16,), (32,), (32, 16), (64, 32)],
-            "mlp__estimator__activation": ["relu", "tanh"],
-            "mlp__estimator__alpha": [1e-4, 1e-3, 1e-2],
-            "mlp__estimator__learning_rate_init": [1e-3, 1e-2],
-        },
-    ),
 }
 
 
@@ -127,7 +76,7 @@ def get_model_spec(name, grid_override=None):
 
 
 def _parse_grid(grid):
-    """JSON nie ma krotek ani None w listach typu (32, 16) - konwersja list zagnieżdżonych na krotki."""
+    """JSON nie ma krotek - listy zagnieżdżone w siatce zamieniane są na krotki."""
     return {
         k: [tuple(v) if isinstance(v, list) else v for v in values]
         for k, values in grid.items()

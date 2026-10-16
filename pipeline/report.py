@@ -282,6 +282,11 @@ def build_report(result, df, cfg, out_dir):
     status = folds.pivot_table(index=["fold", "test_group"], columns="model", values="status", aggfunc="first").reset_index()
     write_table(status, out_dir, "fold_status", "Status modeli w foldach (ok / not_identifiable)")
 
+    per_fold_cols = ["fold", "test_group", "model", "status", "n_test", "pressure_rmse", "pressure_mae",
+                     "pressure_bias", "dT_rmse", "dT_mae", "dT_bias"]
+    per_fold = folds[[c for c in per_fold_cols if c in folds.columns]].sort_values(["fold", "model"])
+    write_table(per_fold, out_dir, "results_per_fold", "Wyniki w poszczególnych foldach")
+
     summary_common = summarize(folds, models, common)
     summary_all = summarize(folds, models, None)
     write_table(summary_common, out_dir, "summary_common_folds")

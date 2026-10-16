@@ -18,10 +18,9 @@ sposób liczenia R², liczba foldów i problem z foldem ΔT = 0.
 | Kryterium strojenia S | SD liczone na foldzie walidacyjnym, nazwy kolumn zamienione (T/p) | SD z części treningowej folda zewnętrznego (zgodnie z pkt 12.4), jawna kolejność `[pressure, dT]` |
 | `Pdir` | Liczony z różnicy **posortowanych etykiet** ciśnienia, nie z kolejności pomiarów w czasie – koduje etykietę (przeciek celu) | Cecha usunięta; ablacja „10 cech + Xinter/Pdir” zastąpiona wariantem z samym `Xinter` |
 | Residual Drift (RD) | Modele w `repeatability_analysis.py` trenowano na wszystkich temperaturach, także tej, z której pochodził testowany `zero_end` | RD liczone z predykcji **out-of-fold**: `zero_end` z danej temperatury przewiduje model folda, w którym ta temperatura była testowa |
-| Rozszerzone modele (GBR, HGBR, XGBoost, GPR, KRR, MLP) | Usunięte z repo dzień przed oddaniem raportu | Przywrócone w rejestrze modeli (`configs/sem1_full.json`) |
-| `KRR-RBF` z `gamma="scale"` | `KernelRidge` nie obsługuje `"scale"` – te kombinacje kończyły się błędem i były cicho pomijane | Usunięte z siatki |
+| Rozszerzone modele (GBR, HGBR, XGBoost, GPR, KRR, MLP) | Usunięte z repo dzień przed oddaniem raportu, więc tabel 3–6 nie da się odtworzyć | Decyzja zespołu: modele pozostają usunięte (niepotrzebne w semestrze 2) |
 | `clean_roi` zwracała 2 albo 3 wartości | Wywołujący rozpakowywał 3–4 wartości; próbki wypadały po cichu przez `try/except` | Zawsze `(roi, quality, ratio)` |
-| `requirements.txt` | Brak nowej linii: `seabornxgboost==3.2.0` | Poprawione, dodany `jinja2` (eksport LaTeX) |
+| `requirements.txt` | Brak nowej linii: `seabornxgboost==3.2.0` | Poprawione, dodany `jinja2` (eksport LaTeX), usunięty `xgboost` |
 
 Usunięte skrypty, których funkcje przejął pipeline: `baselines/run_cv.py`, `baselines/run_experiment.py`,
 `baselines/utils/*`, `model_gain.py`, `repeatability_analysis.py`, `validation_diagnostics.py`,

@@ -4,7 +4,7 @@ Uruchomienie eksperymentu z pliku konfiguracyjnego JSON.
     python main.py experiment configs/main_temperature.json
 
 Struktura konfiguracji (wszystkie klucze poza "name" mają wartości domyślne z DEFAULTS):
-    name, description, seed, data, drop_low_quality, split, inner_cv, n_jobs,
+    name, description, seed, data, drop_low_quality, split, blocks, inner_cv, n_jobs,
     features, models, baseline, grids, include_zero_end_train,
     variants: [ {name, ...dowolne nadpisania powyższych kluczy...}, ... ]   (opcjonalne)
 
@@ -26,14 +26,15 @@ import pandas as pd
 
 from .cv import run_cv
 from .report import build_report, compact_summary, write_table
-from .splits import make_groups, split_diagnostics
+from .splits import split_diagnostics
 
 DEFAULTS = {
     "description": "",
     "seed": 42,
     "data": "Output_files/paired_features.csv",
     "drop_low_quality": True,
-    "split": "temperature",
+    "split": "temperature",       # temperature | series | pressure | condition | block
+    "blocks": None,               # tylko dla split = "block": lista prostokątów w (dT, p)
     "inner_cv": {"n_splits": 3, "group": "series_id"},
     "n_jobs": -1,
     "features": ["mu_X", "mu_Y", "std_X", "std_Y", "iqr_X", "iqr_Y"],
@@ -105,7 +106,7 @@ def run_variant(cfg, out_dir):
         raise RuntimeError(f"Brak cech w danych: {missing}")
 
     result = run_cv(df, cfg)
-    result["split_diagnostics"] = split_diagnostics(df, make_groups(df, cfg["split"]))
+    result["split_diagnostics"] = split_diagnostics(df, result["fold_defs"])
     info = build_report(result, df, cfg, out_dir)
 
     print(f"\n[{cfg['name']}] wspólne foldy: {info['common_folds']}, wykluczone: {info['excluded_folds']}")

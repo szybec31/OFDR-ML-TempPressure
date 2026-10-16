@@ -19,7 +19,7 @@ from sklearn.model_selection import GridSearchCV, GroupKFold
 from baselines.models.physical_model import NotIdentifiableError
 from .metrics import TARGETS, evaluate
 from .models import get_model_spec
-from .splits import make_groups
+from .splits import make_folds
 
 
 def make_joint_scorer(sd_p, sd_t):
@@ -31,12 +31,6 @@ def make_joint_scorer(sd_p, sd_t):
         mae_t = np.mean(np.abs(pred[:, 1] - y[:, 1]))
         return -(0.5 * mae_p / sd_p + 0.5 * mae_t / sd_t)
     return scorer
-
-
-def _ordered_groups(df, groups):
-    """Deterministyczna kolejność foldów: rosnąco po dT, potem po ciśnieniu."""
-    key = df.groupby(groups)[["dT", "pressure"]].min()
-    return list(key.sort_values(["dT", "pressure"]).index)
 
 
 def _fit_ml(spec, rows, features, cfg, seed):
@@ -69,7 +63,7 @@ def _fit_ml(spec, rows, features, cfg, seed):
 def run_cv(df, cfg):
     seed = cfg["seed"]
     features = cfg["features"]
-    groups = make_groups(df, cfg["split"])
+    folds = make_folds(df, cfg)
     specs = [get_model_spec(m, cfg.get("grids", {}).get(m)) for m in cfg["models"]]
 
     is_joint = df["is_joint_regression"] == True
@@ -78,13 +72,15 @@ def run_cv(df, cfg):
     fold_rows, pred_rows, coef_rows = [], [], []
     meta_cols = ["sample_id", "series_id", "rep_idx", "dT", "Tp", "pressure", "point_type"]
 
-    for fold_id, g in enumerate(_ordered_groups(df, groups), start=1):
-        in_test = groups == g
+    n_folds = len(folds)
+
+    for fold_id, (g, mask) in enumerate(folds, start=1):
+        in_test = pd.Series(mask, index=df.index)
         train = df[~in_test]
         test_main = df[in_test & is_joint]
         test_zero_end = df[in_test & is_zero_end]
 
-        print(f"\n>>> FOLD {fold_id}: test = {g}  (test={len(test_main)}, zero_end={len(test_zero_end)})")
+        print(f"\n>>> FOLD {fold_id}/{n_folds}: test = {g}  (test={len(test_main)}, zero_end={len(test_zero_end)})")
 
         ml_train = train[is_joint[~in_test] | (cfg.get("include_zero_end_train", False) & is_zero_end[~in_test])]
 
@@ -138,5 +134,5 @@ def run_cv(df, cfg):
         "folds": pd.DataFrame(fold_rows),
         "predictions": pd.concat(pred_rows, ignore_index=True) if pred_rows else pd.DataFrame(),
         "coefficients": pd.DataFrame(coef_rows),
-        "groups": groups,
+        "fold_defs": folds,
     }
