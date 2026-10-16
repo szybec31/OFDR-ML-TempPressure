@@ -114,6 +114,7 @@ def build_dataframe(broken_data = False):
 # =========================
 
     df["idx"] = df["source_path"].str.extract(r'-(\d+)\.txt$')
+    df["rep_idx"] = pd.to_numeric(df["idx"], errors="coerce").astype("Int64")
 
     df["base"] = df["source_path"].str.extract(
         r'^(.*Switch_channel_\d-)'

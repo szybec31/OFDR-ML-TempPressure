@@ -1,0 +1,9 @@
+{
+  "name": "main_temperature",
+  "description": "Eksperyment główny z semestru 1 po poprawkach etapu 0: leave-one-temperature-out, cechy z raportu. AN-BL bez wartości domyślnych (fold dT=0 -> N/A), AN-BL-NEAREST jako wariant z kalibracją ciśnieniową z najniższej dostępnej temperatury.",
+  "seed": 42,
+  "split": "temperature",
+  "features": ["mu_Y", "mu_X", "std_Y", "std_X", "iqr_Y", "iqr_X"],
+  "models": ["AN-BL", "AN-BL-NEAREST", "MO-LR", "POLY2-RIDGE", "SVR-RBF", "NYSTROEM-SVR", "RF"],
+  "baseline": "AN-BL"
+}

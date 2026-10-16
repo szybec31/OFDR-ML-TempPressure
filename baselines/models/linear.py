@@ -1,14 +1,14 @@
-# models/linear.py
 from sklearn.linear_model import LinearRegression
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-def train_linear(X_train, y_train):
 
-    model = Pipeline([
+def build_linear(seed=42):
+    return Pipeline([
         ("scaler", StandardScaler()),
-        ("linear", LinearRegression())
+        ("linear", LinearRegression()),
     ])
 
-    model.fit(X_train, y_train)
-    return model
+
+def train_linear(X_train, y_train):
+    return build_linear().fit(X_train, y_train)

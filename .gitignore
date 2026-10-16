@@ -5,3 +5,4 @@ __pycache__
 PAKA_AI/
 .ipynb_checkpoints/
 Output_files/
+.venv/

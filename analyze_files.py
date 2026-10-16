@@ -54,8 +54,8 @@ def build_folder_summary(df_meta):
 
             y75, y25 = np.percentile(y_signal, [75, 25])
             x75, x25 = np.percentile(x_signal, [75, 25])
-            irq_Y = y75 - y25
-            irq_X = x75 - x25
+            iqr_Y = y75 - y25
+            iqr_X = x75 - x25
 
             records.append({
                 "folder": row["temp_folder_label"],
@@ -66,9 +66,10 @@ def build_folder_summary(df_meta):
                 "mu_X": np.mean(x_signal),
                 "std_Y": np.std(y_signal),
                 "std_X": np.std(x_signal),
-                "irq_Y": irq_Y,
-                "irq_X": irq_X,
-                #"role": row["role"],
+                "iqr_Y": iqr_Y,
+                "iqr_X": iqr_X,
+                "point_type": row["point_type"],
+                "rep_idx": row["rep_idx"],
                 "is_temp_calibration": row["is_temp_calibration"],
                 "is_pressure_calibration": row["is_pressure_calibration"],
                 "is_joint_regression": row["is_joint_regression"],
@@ -95,36 +96,9 @@ def build_folder_summary(df_meta):
     # It approximates cross-sensitivity between the two polarization channels.
     df["Xinter"] = df["mu_X"] * df["mu_Y"]
 
-    # Pressure direction feature:
-    # Pdir = sign(P_t - P_{t-1}) computed within each temperature series.
-    # zero_start is treated as the beginning of the cycle, pressure points
-    # are sorted by pressure, and zero_end is placed at the end to represent
-    # the return-to-zero phase.
-    df["_point_order"] = np.select(
-        [
-            (df["is_temp_calibration"] == True) & (df["is_repeatability_test"] == False),
-            df["is_repeatability_test"] == True,
-        ],
-        [
-            0,  # zero_start
-            2,  # zero_end
-        ],
-        default=1,  # pressure_point
-    )
-
-    df = df.sort_values(
-        ["series_id", "dT", "_point_order", "pressure"]
-    ).reset_index(drop=True)
-
-    df["Pdir"] = (
-        df.groupby(["series_id", "dT"])["pressure"]
-        .diff()
-        .fillna(0)
-        .apply(np.sign)
-        .astype(int)
-    )
-
-    df = df.drop(columns=["_point_order"])
+    # UWAGA: cecha Pdir (kierunek zmiany ciśnienia) została usunięta w etapie 0.
+    # Była liczona z różnicy POSORTOWANYCH etykiet ciśnienia, a nie z kolejności pomiarów
+    # w czasie, więc kodowała informację z etykiety (przeciek celu do cech).
 
     return df
 

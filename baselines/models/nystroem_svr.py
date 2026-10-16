@@ -5,34 +5,19 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.svm import LinearSVR
 
 
-def train_nystroem_svr(X_train, y_train, config):
+def build_nystroem_svr(seed=42, C=10, epsilon=0.05, gamma=0.1, n_components=300, max_iter=20000):
     """
-    Scalable RBF approximation:
-    StandardScaler -> Nystroem(RBF) -> MultiOutput LinearSVR
-
-    random_state is fixed to make the kernel approximation reproducible.
+    Skalowalna aproksymacja jądra RBF: StandardScaler -> Nystroem(RBF) -> MultiOutput LinearSVR.
+    random_state jest ustalony, więc aproksymacja jądra jest odtwarzalna.
     """
-
-    random_state = config.get("random_state", 42)
-
-    base_model = LinearSVR(
-        C=config.get("C", 10),
-        epsilon=config.get("epsilon", 0.05),
-        max_iter=config.get("max_iter", 20000),
-        random_state=random_state,
-    )
-
-    model = Pipeline([
+    return Pipeline([
         ("scaler", StandardScaler()),
-        ("nystroem", Nystroem(
-            kernel="rbf",
-            gamma=config.get("gamma", 0.1),
-            n_components=config.get("n_components", 300),
-            random_state=random_state,
+        ("nystroem", Nystroem(kernel="rbf", gamma=gamma, n_components=n_components, random_state=seed)),
+        ("svr", MultiOutputRegressor(
+            LinearSVR(C=C, epsilon=epsilon, max_iter=max_iter, random_state=seed)
         )),
-        ("svr", MultiOutputRegressor(base_model)),
     ])
 
-    model.fit(X_train, y_train)
 
-    return model
+def train_nystroem_svr(X_train, y_train, config):
+    return build_nystroem_svr(seed=config.get("random_state", 42)).fit(X_train, y_train)

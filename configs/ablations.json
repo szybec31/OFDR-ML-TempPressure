@@ -1,0 +1,19 @@
+{
+  "name": "ablations",
+  "description": "Ablacje 14.5-14.8 dla MO-LR (leave-one-temperature-out). Zestaw bazowy wg specyfikacji: mu_X, mu_Y, diff_XY, mean_XY. Pdir usunięty (przeciek etykiety). A3 porównywać z A4 - oba mają zero_end w treningu, różnią się tylko etykietami.",
+  "seed": 42,
+  "split": "temperature",
+  "models": ["MO-LR"],
+  "baseline": null,
+  "variants": [
+    {"name": "A1_base4", "features": ["mu_X", "mu_Y", "diff_XY", "mean_XY"]},
+    {"name": "A1_ext8", "features": ["mu_X", "mu_Y", "diff_XY", "mean_XY", "std_X", "std_Y", "iqr_X", "iqr_Y"]},
+    {"name": "A1_ext8_Xinter", "features": ["mu_X", "mu_Y", "diff_XY", "mean_XY", "std_X", "std_Y", "iqr_X", "iqr_Y", "Xinter"]},
+    {"name": "A2_X_only", "features": ["mu_X", "std_X", "iqr_X"]},
+    {"name": "A2_Y_only", "features": ["mu_Y", "std_Y", "iqr_Y"]},
+    {"name": "A3_bad_labels_with_zero_end", "data": "Output_files/paired_features_broken.csv", "include_zero_end_train": true,
+     "features": ["mu_X", "mu_Y", "diff_XY", "mean_XY", "std_X", "std_Y", "iqr_X", "iqr_Y"]},
+    {"name": "A4_good_labels_with_zero_end", "include_zero_end_train": true,
+     "features": ["mu_X", "mu_Y", "diff_XY", "mean_XY", "std_X", "std_Y", "iqr_X", "iqr_Y"]}
+  ]
+}

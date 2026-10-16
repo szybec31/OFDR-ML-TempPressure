@@ -101,11 +101,15 @@ def read_measurement_file(file_path):
     return pd.DataFrame(rows, columns=["length", "value"])
 
 def clean_roi(signal, roi_min=ROI_MIN, roi_max=ROI_MAX):
-    
+    """
+    Wycina ROI, obcina po 2 punkty z brzegów, usuwa NaN i outliery (robust z-score > 3.5).
+
+    Zawsze zwraca krotkę (clean_roi_or_None, quality_ok, kept_ratio).
+    """
     roi = signal[(signal["length"] >= roi_min) & (signal["length"] <= roi_max)]
 
     if len(roi) < 10:
-        return None, False
+        return None, False, 0.0
 
     # obcięcie brzegów
     roi = roi.iloc[2:-2]
@@ -116,7 +120,7 @@ def clean_roi(signal, roi_min=ROI_MIN, roi_max=ROI_MAX):
     roi = roi.dropna()
 
     if len(roi) == 0:
-        return None, False
+        return None, False, 0.0
 
     values = roi["value"].values
 
@@ -124,7 +128,9 @@ def clean_roi(signal, roi_min=ROI_MIN, roi_max=ROI_MAX):
     mad = np.median(np.abs(values - median))
 
     if mad == 0:
-        return roi, False
+        # sygnał stały - nie da się policzyć z-score, nic nie odrzucamy
+        ratio = len(roi) / original_len
+        return roi, ratio >= TRESHOLD, ratio
 
     z = 0.6745 * (values - median) / mad
 
@@ -132,26 +138,25 @@ def clean_roi(signal, roi_min=ROI_MIN, roi_max=ROI_MAX):
 
     clean = roi[mask]
 
-    quality = len(clean) >= TRESHOLD * original_len
+    ratio = len(clean) / original_len
+    quality = ratio >= TRESHOLD
 
-    return clean, quality, len(clean)/original_len
+    return clean, quality, ratio
 
 def compute_signal_delta(y_df, y_ref_df):
+    """
+    Zwraca oczyszczone wartości sygnału w ROI (bez odejmowania referencji - pliki OBR
+    zawierają już przesunięcie względem globalnej referencji 0 MPa / temperatura pokojowa),
+    flagę jakości sygnału oraz udział punktów zachowanych w sygnale i w jego referencji.
 
+    Zawsze zwraca krotkę (values_or_None, quality_ok, kept_ratio, kept_ratio_ref).
+    """
     y_clean, q1, l1 = clean_roi(y_df)
-    y_ref_clean, q2, l2 = clean_roi(y_ref_df)
+    _, _, l2 = clean_roi(y_ref_df)
 
-    if y_clean is None or y_ref_clean is None:
-        return None, False
+    if y_clean is None:
+        return None, False, l1, l2
 
-    min_len = min(len(y_clean), len(y_ref_clean))
-
-    y_vals = y_clean["value"].values[:min_len]
-    y_ref_vals = y_ref_clean["value"].values[:min_len]
-
-    delta = y_vals - y_ref_vals
-
-    # return delta, (q1 and q2), l1, l2
     return y_clean["value"].values, q1, l1, l2
 
 def quality_report(df, threshold = 0.9):

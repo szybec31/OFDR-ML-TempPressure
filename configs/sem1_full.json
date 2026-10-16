@@ -1,0 +1,9 @@
+{
+  "name": "sem1_full",
+  "description": "Wszystkie modele z raportu semestru 1 w jednym uruchomieniu (odtworzenie tabel 3-6 i 8). XGBOOST wymaga pakietu xgboost.",
+  "seed": 42,
+  "split": "temperature",
+  "features": ["mu_Y", "mu_X", "std_Y", "std_X", "iqr_Y", "iqr_X"],
+  "models": ["AN-BL", "AN-BL-NEAREST", "MO-LR", "POLY2-RIDGE", "SVR-RBF", "NYSTROEM-SVR", "KRR-RBF", "GPR", "MLP", "RF", "HGBR", "GBR", "XGBOOST"],
+  "baseline": "AN-BL"
+}

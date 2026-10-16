@@ -1,18 +1,15 @@
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
-from sklearn.preprocessing import PolynomialFeatures
 from sklearn.linear_model import Ridge
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import PolynomialFeatures, StandardScaler
 
-def train_poly2_ridge(X_train, y_train, config):
 
-    model = Pipeline([
+def build_poly2_ridge(seed=42, alpha=1.0):
+    return Pipeline([
         ("scaler", StandardScaler()),
         ("poly", PolynomialFeatures(degree=2)),
-        ("ridge", Ridge(
-            alpha=config.get("alpha", 1.0)
-        ))
+        ("ridge", Ridge(alpha=alpha, random_state=seed)),
     ])
 
-    model.fit(X_train, y_train)
 
-    return model
+def train_poly2_ridge(X_train, y_train, config):
+    return build_poly2_ridge(alpha=config.get("alpha", 1.0)).fit(X_train, y_train)
