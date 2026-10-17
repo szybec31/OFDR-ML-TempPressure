@@ -1,0 +1,17 @@
+{
+  "name": "spatial_windows",
+  "experiment": "spatial",
+  "description": "Punkt 7: podział ROI na niepokrywające się okna o długości L, cechy X, Y, m, d w każdym oknie, RMSE_T(L) i RMSE_p(L) dla kalibracji lokalnej (per okno) i globalnej (jeden zestaw współczynników), lokalne czułości wzdłuż włókna. Zewnętrznie leave-one-temperature-out bez folda dT=0.",
+  "seed": 42,
+  "split": "temperature",
+  "exclude_test_groups": ["dT=0.0"],
+  "base_bin_cm": 1,
+  "window_lengths_cm": [1, 2, 5, 10, 25, 50, 100, "full"],
+  "min_coverage": 0.8,
+  "models": ["AN-JOINT", "CD-LIN"],
+  "modes": ["local", "global"],
+  "profile_lengths_cm": [1, 5, 25],
+  "sensitivity_lengths_cm": [5, 25],
+  "targets": {"pressure": 0.1, "T": 0.2},
+  "thresholds": [0.05, 0.10, 0.20]
+}

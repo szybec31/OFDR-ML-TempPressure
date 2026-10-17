@@ -20,16 +20,22 @@ PAIRED_COLUMNS = [
 
 # skróty poleceń -> plik konfiguracyjny eksperymentu
 CONFIG_ALIASES = {
-    "run": "configs/main_temperature.json",
+    "run": "configs/main_condition.json",
+    "r": "configs/main_condition.json",
     "run_temp": "configs/main_temperature.json",
-    "r": "configs/main_temperature.json",
     "rt": "configs/main_temperature.json",
+    "run_series": "configs/leave_series_out.json",
+    "rso": "configs/leave_series_out.json",
     "run_condition": "configs/main_condition.json",
     "rc": "configs/main_condition.json",
     "run_pressure": "configs/leave_pressure_out.json",
     "rp": "configs/leave_pressure_out.json",
     "run_block": "configs/block_holdout.json",
     "rb": "configs/block_holdout.json",
+    "run_reduced": "configs/reduced_calibration.json",
+    "rr": "configs/reduced_calibration.json",
+    "run_spatial": "configs/spatial_windows.json",
+    "rs": "configs/spatial_windows.json",
     "ablations": "configs/ablations.json",
     "a": "configs/ablations.json",
 }
@@ -74,10 +80,13 @@ HELP = """Użycie: python main.py POLECENIE [POLECENIE ...]
   prepare, p                inventory.csv, training_dataset.csv, paired_features.csv
   prepare_broken, pb        jak wyżej, ale z nieskorygowanymi etykietami 11 / 0.01 MPa (ablacja 3)
   info, i                   liczności ról w paired_features.csv
-  run, r, run_temp, rt      eksperyment główny: configs/main_temperature.json (leave-one-temperature-out)
-  run_condition, rc         configs/main_condition.json (leave-one-condition-out, test pomocniczy)
+  run, r, run_condition, rc eksperyment główny: configs/main_condition.json (leave-one-condition-out)
+  run_temp, rt              configs/main_temperature.json (leave-one-temperature-out)
+  run_series, rso           configs/leave_series_out.json (leave-one-series-out)
   run_pressure, rp          configs/leave_pressure_out.json (leave-one-pressure-level-out)
   run_block, rb             configs/block_holdout.json (usunięcie fragmentów przestrzeni T, p)
+  run_reduced, rr           configs/reduced_calibration.json (pkt 6: ograniczenie liczby stanów kalibracyjnych)
+  run_spatial, rs           configs/spatial_windows.json (pkt 7: okna przestrzenne wzdłuż ROI)
   ablations, a              configs/ablations.json
   experiment PLIK.json      dowolny plik konfiguracyjny
 
@@ -108,7 +117,7 @@ if __name__ == "__main__":
             experiment(CONFIG_ALIASES[arg])
         elif arg in ["experiment", "e"]:
             if not argv:
-                sys.exit("Podaj ścieżkę do pliku konfiguracyjnego, np. python main.py experiment configs/main_temperature.json")
+                sys.exit("Podaj ścieżkę do pliku konfiguracyjnego, np. python main.py experiment configs/main_condition.json")
             experiment(argv.pop(0))
         else:
             sys.exit(f"Nieznane polecenie: {arg}\n\n{HELP}")

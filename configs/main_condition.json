@@ -1,9 +1,10 @@
 {
   "name": "main_condition",
-  "description": "Leave-one-condition-out (jedna kombinacja dT, p w teście). Test pomocniczy / interpolacyjny - train i test dzielą tę samą serię. Bez RF i NYSTROEM-SVR ze względu na czas (119 foldów).",
+  "description": "Eksperyment główny: leave-one-condition-out - w każdym foldzie test = wszystkie powtórzenia jednej kombinacji (dT, p), trening = pozostałe kombinacje (119 foldów). Strojenie hiperparametrów wewnątrz treningu: GroupKFold po warunkach (condition_id), spójnie ze schematem zewnętrznym. Bez RF i NYSTROEM-SVR ze względu na czas (siatki x 119 foldów); można je dopisać do listy models.",
   "seed": 42,
   "split": "condition",
+  "inner_cv": {"n_splits": 3, "group": "condition_id"},
   "features": ["mu_Y", "mu_X", "m", "d", "std_Y", "std_X", "iqr_Y", "iqr_X"],
-  "models": ["AN-BL", "AN-BL-NEAREST", "MO-LR", "POLY2-RIDGE", "SVR-RBF"],
+  "models": ["AN-BL", "AN-BL-NEAREST", "AN-JOINT", "CD-LIN", "CD-POLY", "MO-LR", "POLY2-RIDGE", "SVR-RBF"],
   "baseline": "AN-BL"
 }

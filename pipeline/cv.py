@@ -13,12 +13,11 @@ import time
 
 import numpy as np
 import pandas as pd
-from sklearn.base import clone
 from sklearn.model_selection import GridSearchCV, GroupKFold
 
 from baselines.models.physical_model import NotIdentifiableError
-from .metrics import TARGETS, evaluate
-from .models import get_model_spec
+from .metrics import get_targets, evaluate
+from .models import build_estimator, get_model_spec
 from .splits import make_folds
 
 
@@ -34,8 +33,9 @@ def make_joint_scorer(sd_p, sd_t):
 
 
 def _fit_ml(spec, rows, features, cfg, seed):
-    X, y = rows[features], rows[TARGETS]
-    est = spec.build(seed)
+    targets = get_targets(cfg)
+    X, y = rows[features], rows[targets]
+    est = build_estimator(spec, seed, cfg)
 
     inner = cfg["inner_cv"]
     n_groups = rows[inner["group"]].nunique()
@@ -45,8 +45,8 @@ def _fit_ml(spec, rows, features, cfg, seed):
         est.fit(X, y)
         return est, ({} if not spec.grid else {"_untuned": "za mało grup do strojenia"})
 
-    sd_p = float(np.std(y["pressure"])) or 1.0
-    sd_t = float(np.std(y["dT"])) or 1.0
+    sd_p = float(np.std(y[targets[0]])) or 1.0
+    sd_t = float(np.std(y[targets[1]])) or 1.0
     search = GridSearchCV(
         estimator=est,
         param_grid=spec.grid,
@@ -63,6 +63,8 @@ def _fit_ml(spec, rows, features, cfg, seed):
 def run_cv(df, cfg):
     seed = cfg["seed"]
     features = cfg["features"]
+    targets = get_targets(cfg)
+    t_col = targets[1]
     folds = make_folds(df, cfg)
     specs = [get_model_spec(m, cfg.get("grids", {}).get(m)) for m in cfg["models"]]
 
@@ -70,6 +72,7 @@ def run_cv(df, cfg):
     is_zero_end = df["is_repeatability_test"] == True
 
     fold_rows, pred_rows, coef_rows = [], [], []
+    # dT i Tp zawsze zapisywane jako metadane; prawdziwa wartość celu jest w kolumnie t_col
     meta_cols = ["sample_id", "series_id", "rep_idx", "dT", "Tp", "pressure", "point_type"]
 
     n_folds = len(folds)
@@ -89,14 +92,15 @@ def run_cv(df, cfg):
             row = {"fold": fold_id, "test_group": g, "model": spec.name, "n_test": len(test_main)}
             try:
                 if spec.kind == "physical":
-                    model = clone(spec.build(seed)).fit(train, train[TARGETS])
+                    model = build_estimator(spec, seed, cfg).fit(train, train[targets])
                     best_params = {}
                     coef_rows.append({"fold": fold_id, "test_group": g, "model": spec.name, **model.coefficients()})
                     predict = lambda d: model.predict(d)
                     row["n_train"] = int((train["is_temp_calibration"] | train["is_pressure_calibration"]).sum())
                 else:
-                    model, best_params = _fit_ml(spec, ml_train, features, cfg, seed)
-                    predict = lambda d: model.predict(d[features])
+                    feats = spec.features or features
+                    model, best_params = _fit_ml(spec, ml_train, feats, cfg, seed)
+                    predict = lambda d, feats=feats: model.predict(d[feats])
                     row["n_train"] = len(ml_train)
             except NotIdentifiableError as e:
                 row.update({"status": "not_identifiable", "note": str(e)})
@@ -112,20 +116,20 @@ def run_cv(df, cfg):
                     continue
                 pred = np.asarray(predict(part))
                 if subset == "test":
-                    row.update(evaluate(part[TARGETS], pred))
+                    row.update(evaluate(part[targets], pred, targets))
                 block = part[meta_cols].copy()
                 block.insert(0, "subset", subset)
                 block.insert(0, "model", spec.name)
                 block.insert(0, "test_group", g)
                 block.insert(0, "fold", fold_id)
-                block["pressure_pred"] = pred[:, 0]
-                block["dT_pred"] = pred[:, 1]
+                block[f"{targets[0]}_pred"] = pred[:, 0]
+                block[f"{t_col}_pred"] = pred[:, 1]
                 pred_rows.append(block)
 
             row["fit_seconds"] = round(time.time() - t0, 3)
             fold_rows.append(row)
             if "pressure_rmse" in row:
-                print(f"  {spec.name:<15} p_RMSE={row['pressure_rmse']:.3f}  T_RMSE={row['dT_rmse']:.3f}"
+                print(f"  {spec.name:<15} p_RMSE={row['pressure_rmse']:.3f}  {t_col}_RMSE={row[f'{t_col}_rmse']:.3f}"
                       f"  ({row['fit_seconds']:.1f}s)")
             else:
                 print(f"  {spec.name:<15} tylko zero_end ({row['fit_seconds']:.1f}s)")

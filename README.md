@@ -28,11 +28,14 @@
 
 6. Run experiments. Every experiment is defined by a JSON file in `configs/`:
    ```
-   python main.py run                                   # configs/main_temperature.json
+   python main.py run                                   # configs/main_condition.json (main: leave-one-condition-out)
+   python main.py run_temp                              # configs/main_temperature.json (leave-one-temperature-out)
    python main.py ablations                             # configs/ablations.json
-   python main.py run_condition                         # configs/main_condition.json
+   python main.py run_series                            # configs/leave_series_out.json (leave-one-series-out)
    python main.py run_pressure                          # configs/leave_pressure_out.json (leave-one-pressure-level-out)
    python main.py run_block                             # configs/block_holdout.json (held-out regions of the T, p space)
+   python main.py run_reduced                           # configs/reduced_calibration.json (fewer calibration states, task 6)
+   python main.py run_spatial                           # configs/spatial_windows.json (spatial windows along the ROI, task 7)
    python main.py experiment configs/my_experiment.json # any config
    ```
    Several commands can be chained, e.g. `python main.py setup run ablations`. `python main.py help` lists all options.
@@ -49,7 +52,34 @@
    - `physical_coefficients.*`, `split_diagnostics.*`, plots (`*.png`).
    Every table is saved as `.csv`, `.md` and `.tex`, so report tables can be pasted without retyping numbers.
 
+   `run_reduced` (`"experiment": "reduced_calibration"`) writes instead: `curve.*` (RMSE vs number of
+   calibration states for every model and selection method, mean/std over random repeats), `min_states.*`
+   (minimal number of states with RMSE worse by at most 5/10/20 % than full calibration), `designs.csv`,
+   `results_raw.csv`, `rmse_vs_states_<model>.png`, `models_<method>.png`, `designs_examples.png`.
+
+   `run_spatial` (`"experiment": "spatial"`) writes: `rmse_vs_L.*` and `rmse_vs_L*.png` (RMSE vs window length,
+   local vs global calibration), `min_window_length.*`, `window_rmse_profiles.csv`, `window_rmse_L*cm.png`,
+   `outlier_windows.*`, `sensitivity_L*cm.*` and `sensitivity_homogeneity.*` (local sensitivities along the fiber).
+   The first run reads all raw files once and caches 1 cm bins in `Output_files/spatial_bins_1cm.npz`.
+
+   Temperature target (any config):
+   ```
+   "temperature_target": "dT",        // dT = deltaT_label (default) | Tp = T_plate_label
+   "temperature_reference": "auto"    // T_ref for the physical models; auto: 0 for dT, Tp of the reference series (23) for Tp
+   ```
+   The chosen column is used everywhere: as the model target, for fold labels (`Tp=50`, `Tp=50_p=5.0`), for
+   calibration states and in all output names (`Tp_rmse`, `Tp_pred`, ...), so every table shows which target was used.
+   Physical models (AN-BL, AN-JOINT) compute in `T - T_ref`, because their formula has no intercept (signal = 0 in the
+   reference state). With `Tp`, blocks are defined with `T_min` / `T_max` (in Tp units) and `exclude_test_groups`
+   uses `Tp=...` labels; the old `dT_*` names are rejected with an error instead of being silently ignored.
+
    Conventions:
+   - the main validation scheme is **leave-one-condition-out**: each fold tests all repetitions of one
+     (dT, p) combination, the remaining 118 combinations are used for training; hyperparameters are tuned
+     inside the training part with GroupKFold over conditions (`inner_cv.group = condition_id`).
+     This is an interpolation test - the same temperature and pressure levels appear in training in other
+     combinations. Generalisation to unseen temperatures / pressures / regions: `run_temp`, `run_series`,
+     `run_pressure`, `run_block`,
    - a model that cannot be calibrated on the training data of a fold (e.g. AN-BL without dT = 0)
      gets status `not_identifiable` - no hidden default coefficients,
    - the main comparison, statistical tests and G are computed on the **common folds**
@@ -74,10 +104,14 @@ Python files:
   - `runner.py` - config loading, run directory, metadata, variants
   - `cv.py` - outer leave-one-group-out loop and inner GridSearchCV (GroupKFold by series)
   - `splits.py` - split schemes: `temperature`, `series`, `pressure`, `condition` (leave-one-group-out) and `block` (held-out rectangles in the T, p space, defined in the config)
-  - `models.py` - model registry (builders + hyperparameter grids)
+  - `models.py` - model registry (builders, hyperparameter grids, fixed feature sets, minimal number of states)
+  - `calibration_design.py` - selection of calibration states (stratified random, grid, min/max/mid, maximin, D-optimal)
+  - `reduced_calibration.py` - task 6 experiment: accuracy vs number of calibration states
+  - `spatial.py` - task 7 experiment: spatial windows, local vs global calibration, local sensitivities
   - `metrics.py` - MAE, RMSE, MaxAE, bias, R^2
   - `report.py` - all tables, statistical tests, gain G, repeatability, plots
-- `baselines/models/` - model definitions (`physical_model.py` = analytical model from the paper)
+- `baselines/models/` - model definitions (`physical_model.py` = analytical model from the paper: AN-BL with
+  sequential calibration and AN-JOINT with joint least-squares calibration on any set of (T, p) states)
 - `configs/` - experiment definitions
 
 Notebooks:

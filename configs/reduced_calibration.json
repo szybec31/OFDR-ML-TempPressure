@@ -1,0 +1,58 @@
+{
+  "name": "reduced_calibration",
+  "experiment": "reduced_calibration",
+  "description": "Punkt 6: dokładność w funkcji liczby stanów kalibracyjnych (dT, p). Zewnętrznie leave-one-temperature-out (bez folda dT=0, jak we wspólnych foldach eksperymentu głównego); stany wybierane wyłącznie spośród stanów treningowych folda, strojenie tylko na wybranych stanach, test zawsze pełny. Siatki hiperparametrów takie same jak w eksperymencie głównym (pipeline/models.py).",
+  "seed": 42,
+  "split": "temperature",
+  "exclude_test_groups": [
+    "dT=0.0"
+  ],
+  "features": [
+    "mu_Y",
+    "mu_X",
+    "m",
+    "d",
+    "std_Y",
+    "std_X",
+    "iqr_Y",
+    "iqr_X"
+  ],
+  "models": [
+    "AN-JOINT",
+    "CD-LIN",
+    "CD-POLY",
+    "MO-LR",
+    "POLY2-RIDGE",
+    "SVR-RBF"
+  ],
+  "fractions": [
+    1.0,
+    0.75,
+    0.5,
+    0.33,
+    0.25
+  ],
+  "n_states_extra": [
+    3,
+    4,
+    6,
+    9,
+    12,
+    16,
+    20
+  ],
+  "methods": [
+    "stratified_random",
+    "regular_grid",
+    "min_max_mid",
+    "maximin",
+    "d_optimal_phys",
+    "d_optimal_quad"
+  ],
+  "n_repeats": 20,
+  "thresholds": [
+    0.05,
+    0.1,
+    0.2
+  ]
+}

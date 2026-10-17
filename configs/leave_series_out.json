@@ -1,0 +1,9 @@
+{
+  "name": "leave_series_out",
+  "description": "Leave-one-series-out: w każdym foldzie test = cała jedna seria pomiarowa (wszystkie jej ciśnienia i powtórzenia, w tym zero_end), trening = pozostałe serie. Strojenie wewnętrzne GroupKFold po series_id. W obecnych danych 1 seria = 1 temperatura, więc foldy są identyczne jak w leave-one-temperature-out; schemat ma znaczenie, gdy pojawi się kilka serii w tej samej temperaturze.",
+  "seed": 42,
+  "split": "series",
+  "features": ["mu_Y", "mu_X", "m", "d", "std_Y", "std_X", "iqr_Y", "iqr_X"],
+  "models": ["AN-BL", "AN-BL-NEAREST", "AN-JOINT", "CD-LIN", "CD-POLY", "MO-LR", "POLY2-RIDGE", "SVR-RBF", "NYSTROEM-SVR", "RF"],
+  "baseline": "AN-BL"
+}
