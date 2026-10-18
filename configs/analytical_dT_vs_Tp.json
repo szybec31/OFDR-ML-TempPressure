@@ -1,0 +1,31 @@
+{
+  "name": "analytical_dT_vs_Tp",
+  "description": "Modele analityczne (AN-BL, AN-BL-NEAREST, AN-JOINT) oraz MO-LR i CD-LIN jako odniesienie ML, w czterech schematach walidacji (condition, temperature, pressure, block) i dla dwóch celów temperaturowych: dT (deltaT_label) i Tp (T_plate_label). Opis wyników: docs/modele_analityczne_dT_Tp.md.",
+  "seed": 42,
+  "features": ["mu_Y", "mu_X", "m", "d", "std_Y", "std_X", "iqr_Y", "iqr_X"],
+  "models": ["AN-BL", "AN-BL-NEAREST", "AN-JOINT", "MO-LR", "CD-LIN"],
+  "baseline": "AN-JOINT",
+  "common_folds": "baseline",
+  "variants": [
+    {"name": "condition_dT", "split": "condition", "temperature_target": "dT", "inner_cv": {"n_splits": 3, "group": "condition_id"}},
+    {"name": "condition_Tp", "split": "condition", "temperature_target": "Tp", "inner_cv": {"n_splits": 3, "group": "condition_id"}},
+    {"name": "temperature_dT", "split": "temperature", "temperature_target": "dT"},
+    {"name": "temperature_Tp", "split": "temperature", "temperature_target": "Tp"},
+    {"name": "pressure_dT", "split": "pressure", "temperature_target": "dT"},
+    {"name": "pressure_Tp", "split": "pressure", "temperature_target": "Tp"},
+    {"name": "block_dT", "split": "block", "temperature_target": "dT",
+     "blocks": [
+       {"name": "high_T_high_p", "T_min": 37.5, "p_min": 7},
+       {"name": "low_T_high_p", "T_min": 16.2, "T_max": 24.7, "p_min": 7},
+       {"name": "high_T_low_p", "T_min": 37.5, "p_min": 0.1, "p_max": 3},
+       {"name": "center_hole", "T_min": 24.7, "T_max": 33, "p_min": 4, "p_max": 6}
+     ]},
+    {"name": "block_Tp", "split": "block", "temperature_target": "Tp",
+     "blocks": [
+       {"name": "high_T_high_p", "T_min": 65, "p_min": 7},
+       {"name": "low_T_high_p", "T_min": 42, "T_max": 50, "p_min": 7},
+       {"name": "high_T_low_p", "T_min": 65, "p_min": 0.1, "p_max": 3},
+       {"name": "center_hole", "T_min": 50, "T_max": 60, "p_min": 4, "p_max": 6}
+     ]}
+  ]
+}

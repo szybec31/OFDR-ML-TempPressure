@@ -1,6 +1,8 @@
 # Multivariate analysis of OFDR data and regression models for simultaneous estimation of temperature and hydrostatic pressure changes in K-SHF fibers
 
 
+New to the project? Start with the guide (in Polish): [docs/przewodnik_po_projekcie.md](docs/przewodnik_po_projekcie.md).
+
 ## Download and run the project:
 1. Clone the repository:
    ```
@@ -36,6 +38,7 @@
    python main.py run_block                             # configs/block_holdout.json (held-out regions of the T, p space)
    python main.py run_reduced                           # configs/reduced_calibration.json (fewer calibration states, task 6)
    python main.py run_spatial                           # configs/spatial_windows.json (spatial windows along the ROI, task 7)
+   python main.py experiment configs/analytical_dT_vs_Tp.json  # analytical models, dT vs Tp, 4 validation schemes (~30 s)
    python main.py experiment configs/my_experiment.json # any config
    ```
    Several commands can be chained, e.g. `python main.py setup run ablations`. `python main.py help` lists all options.
