@@ -2,8 +2,13 @@
 Tabele i wykresy generowane z wyników JEDNEGO uruchomienia (folds + predictions).
 
 Konwencje:
-- "common folds" = foldy, w których WSZYSTKIE modele mają status ok; na nich liczone jest
-  główne porównanie (summary_common), testy statystyczne i współczynnik G,
+- foldy referencyjne (cfg["common_folds"]), na których liczona jest tabela główna (summary_common):
+      "baseline" (domyślnie) - foldy, w których działa model odniesienia (cfg["baseline"]);
+                               model, który w części z nich jest N/A, ma w tabeli mniejsze n_folds,
+      "all"                  - foldy, w których działają WSZYSTKIE modele (wszystkie mają to samo n_folds),
+      [lista modeli]         - foldy, w których działają wymienione modele,
+- testy parowane i współczynnik G są liczone dla każdej pary (odniesienie, model) na foldach
+  referencyjnych, w których działają OBA modele - n podawane w każdym wierszu,
 - średnia i odchylenie standardowe po foldach (ddof=1),
 - R^2 per fold jest raportowane tylko tam, gdzie cel zmienia się w foldzie; R^2 "pooled"
   (po złączeniu predykcji ze wszystkich foldów) jest osobną, podpisaną tabelą.
@@ -55,11 +60,35 @@ def write_table(df, out_dir, name, title=None, digits=3):
 
 # ---------------------------------------------------------------- podsumowania
 
-def common_folds(folds):
+def _ok_table(folds):
     ok = folds.pivot_table(index="fold", columns="model", values="status",
                            aggfunc=lambda s: (s == "ok").all())
-    ok = ok.fillna(False).astype(bool)
-    return sorted(ok.index[ok.all(axis=1)].tolist())
+    return ok.fillna(False).astype(bool)
+
+
+def common_folds(folds, policy="all", baseline=None):
+    """Foldy referencyjne wg polityki: "all", "baseline" albo lista modeli (patrz docstring modułu)."""
+    ok = _ok_table(folds)
+    if policy == "all":
+        required = list(ok.columns)
+    elif policy == "baseline":
+        if not baseline:
+            raise ValueError('common_folds = "baseline" wymaga ustawienia "baseline" w konfiguracji')
+        required = [baseline]
+    elif isinstance(policy, (list, tuple)):
+        required = list(policy)
+    else:
+        raise ValueError(f'common_folds = {policy!r}; dozwolone: "all", "baseline" albo lista modeli')
+    missing = [m for m in required if m not in ok.columns]
+    if missing:
+        raise ValueError(f"common_folds: modeli {missing} nie ma w wynikach")
+    return sorted(ok.index[ok[required].all(axis=1)].tolist())
+
+
+def pair_folds(folds, a, b, fold_ids):
+    """Foldy z fold_ids, w których oba modele mają status ok."""
+    ok = _ok_table(folds)
+    return [f for f in fold_ids if ok.loc[f, a] and ok.loc[f, b]]
 
 
 def summarize(folds, models, targets, fold_ids=None):
@@ -109,16 +138,18 @@ def compact_summary(summary, targets):
 def paired_tests(folds, baseline, models, fold_ids, targets):
     metrics = [f"{t}_rmse" for t in targets]
     rows = []
-    base = folds[(folds["model"] == baseline) & folds["fold"].isin(fold_ids)].set_index("fold")
-    n = len(fold_ids)
-    min_p = 2.0 / 2 ** n if n > 0 else np.nan
+    base = folds[folds["model"] == baseline].set_index("fold")
     for m in models:
         if m == baseline:
             continue
-        other = folds[(folds["model"] == m) & folds["fold"].isin(fold_ids)].set_index("fold")
+        # para porównywana tylko na foldach, w których działają oba modele
+        ids = pair_folds(folds, baseline, m, fold_ids)
+        n = len(ids)
+        min_p = 2.0 / 2 ** n if n > 0 else np.nan
+        other = folds[folds["model"] == m].set_index("fold")
         for metric in metrics:
-            a = base.loc[fold_ids, metric].to_numpy(dtype=float)
-            b = other.loc[fold_ids, metric].to_numpy(dtype=float)
+            a = base.loc[ids, metric].to_numpy(dtype=float)
+            b = other.loc[ids, metric].to_numpy(dtype=float)
             d = a - b
             if n < 2 or np.allclose(d, 0):
                 w_stat, w_p, t_p, cohen = np.nan, 1.0, 1.0, 0.0
@@ -139,18 +170,22 @@ def paired_tests(folds, baseline, models, fold_ids, targets):
     return pd.DataFrame(rows)
 
 
-def gain_table(summary, baseline, targets):
-    """G = (RMSE_base - RMSE_model) / RMSE_base * 100% (Załącznik, krok 4), na tych samych foldach."""
-    s = summary.set_index("model")
-    if baseline not in s.index:
-        return pd.DataFrame()
+def gain_table(folds, baseline, models, fold_ids, targets):
+    """
+    G = (RMSE_base - RMSE_model) / RMSE_base * 100% (Załącznik, krok 4); średnie RMSE obu modeli
+    liczone na TYCH SAMYCH foldach (foldy referencyjne, w których działają oba modele).
+    """
     rows = []
-    for m in s.index:
+    for m in models:
         if m == baseline:
             continue
-        row = {"model": m}
+        ids = pair_folds(folds, baseline, m, fold_ids)
+        f = folds[folds["fold"].isin(ids)]
+        base = f[f["model"] == baseline]
+        other = f[f["model"] == m]
+        row = {"model": m, "n_folds": len(ids)}
         for t in targets:
-            b, v = s.loc[baseline, f"{t}_rmse_mean"], s.loc[m, f"{t}_rmse_mean"]
+            b, v = base[f"{t}_rmse"].mean(), other[f"{t}_rmse"].mean()
             row[f"{t}_rmse_baseline"] = b
             row[f"{t}_rmse_model"] = v
             row[f"G_{t}_percent"] = (b - v) / b * 100 if b else np.nan
@@ -282,7 +317,8 @@ def build_report(result, df, cfg, out_dir):
         write_table(result["coefficients"], out_dir, "physical_coefficients", "Współczynniki modeli analitycznych per fold", 6)
 
     all_folds = sorted(folds["fold"].unique().tolist())
-    common = common_folds(folds)
+    policy = cfg.get("common_folds", "baseline") if baseline else "all"
+    common = common_folds(folds, policy, baseline)
     excluded = sorted(set(all_folds) - set(common))
     status = folds.pivot_table(index=["fold", "test_group"], columns="model", values="status", aggfunc="first").reset_index()
     write_table(status, out_dir, "fold_status", "Status modeli w foldach (ok / not_identifiable)")
@@ -296,16 +332,27 @@ def build_report(result, df, cfg, out_dir):
     summary_all = summarize(folds, models, targets, None)
     write_table(summary_common, out_dir, "summary_common_folds")
     write_table(summary_all, out_dir, "summary_all_valid_folds")
-    write_table(compact_summary(summary_common, targets), out_dir, "results_table",
-                f"Wyniki na wspólnych foldach ({len(common)}/{len(all_folds)}), średnia (std) po foldach")
+    if policy == "all":
+        rule = "działają wszystkie modele"
+    elif policy == "baseline":
+        rule = f"działa {baseline}"
+    else:
+        rule = f"działają {', '.join(policy)}"
+    title = (f"Wyniki na foldach referencyjnych ({len(common)}/{len(all_folds)}; foldy, w których {rule}), "
+             f"średnia (std) po foldach")
+    short = summary_common.loc[summary_common["n_folds"] < len(common), "model"].tolist()
+    if short:
+        title += (f". UWAGA: {', '.join(short)} - mniej foldów (N/A w części foldów), "
+                  f"ich średnie nie są wprost porównywalne z resztą; porównanie parami: paired_tests, gain_vs_baseline")
+    write_table(compact_summary(summary_common, targets), out_dir, "results_table", title)
     write_table(pooled_metrics(preds, models, common, targets), out_dir, "pooled_metrics",
                 "Metryki pooled (predykcje ze wspólnych foldów złączone), w tym R^2 globalne")
 
-    if baseline and baseline in models and len(common) >= 2:
+    if baseline and len(common) >= 2:
         write_table(paired_tests(folds, baseline, models, common, targets), out_dir, "paired_tests",
-                    f"Testy parowane vs {baseline} (wspólne foldy, n={len(common)})", 4)
-        write_table(gain_table(summary_common, baseline, targets), out_dir, "gain_vs_baseline",
-                    f"Współczynnik zysku G względem {baseline} (RMSE, wspólne foldy)", 2)
+                    f"Testy parowane vs {baseline} (foldy referencyjne, w których działają oba modele; n w wierszu)", 4)
+        write_table(gain_table(folds, baseline, models, common, targets), out_dir, "gain_vs_baseline",
+                    f"Współczynnik zysku G względem {baseline} (RMSE na foldach wspólnych dla pary)", 2)
 
     drift = signal_drift(df, t_col)
     if not drift.empty:
@@ -331,4 +378,5 @@ def build_report(result, df, cfg, out_dir):
     plot_pred_vs_true(preds, models, common, os.path.join(out_dir, "pred_vs_true.png"), targets)
     plot_residual_hist(preds, models, common, os.path.join(out_dir, "residuals_hist.png"), targets)
 
-    return {"common_folds": common, "excluded_folds": excluded, "summary_common": summary_common}
+    return {"common_folds": common, "excluded_folds": excluded, "summary_common": summary_common,
+            "common_folds_policy": policy}

@@ -5,7 +5,7 @@ Uruchomienie eksperymentu z pliku konfiguracyjnego JSON.
 
 Struktura konfiguracji (wszystkie klucze poza "name" mają wartości domyślne z DEFAULTS):
     name, description, seed, data, drop_low_quality, temperature_target, temperature_reference,
-    split, blocks, inner_cv, n_jobs, features, models, baseline, grids, include_zero_end_train,
+    split, blocks, inner_cv, n_jobs, features, models, baseline, common_folds, grids, include_zero_end_train,
     variants: [ {name, ...dowolne nadpisania powyższych kluczy...}, ... ]   (opcjonalne)
 
 Klucz "experiment" wybiera rodzaj eksperymentu:
@@ -53,7 +53,8 @@ DEFAULTS = {
     "n_jobs": -1,
     "features": ["mu_X", "mu_Y", "m", "d", "std_X", "std_Y", "iqr_X", "iqr_Y"],
     "models": ["AN-BL", "MO-LR"],
-    "baseline": "AN-BL",
+    "baseline": "AN-BL",          # model odniesienia (testy parowane, zysk G); null = brak
+    "common_folds": "baseline",   # foldy tabeli głównej: "baseline" (działa odniesienie) | "all" | [modele]
     "grids": {},
     "include_zero_end_train": False,
     "exclude_test_groups": [],    # foldy pomijane (reduced_calibration, spatial), np. ["dT=0.0"]
@@ -156,6 +157,8 @@ def run_variant(cfg, out_dir):
         EXPERIMENTS[cfg["experiment"]](cfg, out_dir, df)
         return None
 
+    if cfg.get("baseline") and cfg["baseline"] not in cfg["models"]:
+        raise RuntimeError(f"baseline {cfg['baseline']!r} nie występuje w liście models: {cfg['models']}")
     needed = set(cfg["features"])
     for m in cfg["models"]:
         needed |= set(get_model_spec(m).features or [])
@@ -167,7 +170,8 @@ def run_variant(cfg, out_dir):
     result["split_diagnostics"] = split_diagnostics(df, result["fold_defs"], temperature_target(cfg))
     info = build_report(result, df, cfg, out_dir)
 
-    print(f"\n[{cfg['name']}] wspólne foldy: {info['common_folds']}, wykluczone: {info['excluded_folds']}")
+    print(f"\n[{cfg['name']}] foldy referencyjne ({info['common_folds_policy']}): {info['common_folds']}, "
+          f"wykluczone: {info['excluded_folds']}")
     print(compact_summary(info["summary_common"], get_targets(cfg)).to_string(index=False))
     return info
 

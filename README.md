@@ -82,8 +82,11 @@
      `run_pressure`, `run_block`,
    - a model that cannot be calibrated on the training data of a fold (e.g. AN-BL without dT = 0)
      gets status `not_identifiable` - no hidden default coefficients,
-   - the main comparison, statistical tests and G are computed on the **common folds**
-     (folds where all models in the config are valid); `n_folds` is reported in every table,
+   - `"baseline"` sets the reference model (paired tests, gain G). `"common_folds"` chooses the folds of the
+     main table: `"baseline"` (default) - folds where the reference model is valid, `"all"` - folds where every
+     model is valid, or a list of model names. Example: with `"baseline": "AN-BL-NEAREST"` leave-one-temperature-out
+     uses all 9/9 folds, and AN-BL (N/A for dT = 0) is shown with `n_folds = 8`. Paired tests and G are computed
+     per pair, on the folds where both models are valid; `n_folds` is reported in every row,
    - per-fold R^2 is reported only where the target varies inside the fold; pooled R^2 is a separate table,
    - `zero_end` samples are never used for training (unless a config sets `include_zero_end_train`)
      and never enter the main test metrics.
