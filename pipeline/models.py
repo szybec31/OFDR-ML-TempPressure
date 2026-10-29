@@ -2,6 +2,7 @@
 from dataclasses import dataclass, field, replace
 from typing import Callable, Optional
 
+from baselines.models.hybrid import HybridPhysicalModel
 from baselines.models.linear import build_linear
 from baselines.models.nystroem_svr import build_nystroem_svr
 from baselines.models.physical_model import JointPhysicalModel, PhysicalModel
@@ -21,6 +22,10 @@ class ModelSpec:
     features: Optional[list] = None   # stały zestaw cech modelu (None -> cechy z konfiguracji)
     min_states: int = 3               # minimalna liczba stanów (T, p) potrzebna do kalibracji
 
+
+# Modele hybrydowe: mu_X, mu_Y -> część fizyczna (AN-JOINT), reszta -> model resztowy.
+# m pominięte: to (mu_X + mu_Y) / 2, a temperaturę niesie już predykcja fizyczna.
+HYBRID_FEATURES = ["mu_X", "mu_Y", "d", "std_X", "std_Y", "iqr_X", "iqr_Y"]
 
 # Siatki = stan z końca semestru 1 (commit 2f4e5c7).
 MODEL_REGISTRY = {
@@ -50,6 +55,19 @@ MODEL_REGISTRY = {
         "CD-POLY", build_poly2_ridge, features=["m", "d"], min_states=6,
         grid={"ridge__alpha": [0.0001, 0.001, 0.01, 0.1, 1, 10]},
         description="Wielomian 2. stopnia (ridge) na m i d",
+    ),
+    "HYB-JOINT-RIDGE": ModelSpec(
+        "HYB-JOINT-RIDGE", lambda seed: HybridPhysicalModel(residual="ridge", random_state=seed),
+        features=HYBRID_FEATURES, min_states=3,
+        grid={"alpha": [0.1, 1, 10, 100, 1000, 10000, 100000]},
+        description="Hybryda: AN-JOINT + Ridge na resztach (cechy d, std, IQR i predykcje fizyczne); "
+                    "duże alpha = sam AN-JOINT",
+    ),
+    "HYB-JOINT-GP": ModelSpec(
+        "HYB-JOINT-GP", lambda seed: HybridPhysicalModel(residual="gp", random_state=seed),
+        features=HYBRID_FEATURES, min_states=3,
+        description="Hybryda: AN-JOINT + proces gaussowski (RBF ARD + szum) na resztach; "
+                    "daleko od danych poprawka -> 0, czyli powrót do fizyki",
     ),
     "MO-LR": ModelSpec("MO-LR", build_linear, description="Wielowyjściowa regresja liniowa"),
     "POLY2-RIDGE": ModelSpec(

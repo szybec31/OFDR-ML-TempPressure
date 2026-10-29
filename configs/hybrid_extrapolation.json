@@ -1,0 +1,23 @@
+{
+  "name": "hybrid_extrapolation",
+  "description": "Modele hybrydowe (AN-JOINT + ML na resztach: Ridge, proces gaussowski) vs fizyka i ML. Każdy wariant zapisuje fold_regimes (interpolacja / ekstrapolacja T, p w każdym foldzie) i regime_comparison (RMSE osobno dla obu rodzajów foldów, różnica i liczba wygranych vs AN-JOINT). Opis: docs/hybryda_ekstrapolacja.md.",
+  "seed": 42,
+  "features": ["mu_Y", "mu_X", "m", "d", "std_Y", "std_X", "iqr_Y", "iqr_X"],
+  "models": ["AN-BL-NEAREST", "AN-JOINT", "CD-LIN", "MO-LR", "POLY2-RIDGE", "HYB-JOINT-RIDGE", "HYB-JOINT-GP"],
+  "baseline": "AN-JOINT",
+  "model_params": {
+    "AN-BL-NEAREST": {"calibration_temperature": null, "calibration_pressure": 0.0}
+  },
+  "variants": [
+    {"name": "temperature", "split": "temperature"},
+    {"name": "pressure", "split": "pressure"},
+    {"name": "block", "split": "block",
+     "blocks": [
+       {"name": "high_T_high_p", "dT_min": 37.5, "p_min": 7},
+       {"name": "low_T_high_p", "dT_min": 16.2, "dT_max": 24.7, "p_min": 7},
+       {"name": "high_T_low_p", "dT_min": 37.5, "p_min": 0.1, "p_max": 3},
+       {"name": "center_hole", "dT_min": 24.7, "dT_max": 33, "p_min": 4, "p_max": 6}
+     ]},
+    {"name": "condition", "split": "condition", "inner_cv": {"n_splits": 3, "group": "condition_id"}}
+  ]
+}

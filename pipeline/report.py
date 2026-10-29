@@ -194,6 +194,103 @@ def gain_table(folds, baseline, models, fold_ids, targets):
     return pd.DataFrame(rows)
 
 
+# ---------------------------------------------------------------- interpolacja / ekstrapolacja
+
+def _outside(values, lo, hi):
+    """Największa odległość wartości poza przedziałem [lo, hi] (0 = wszystkie w środku)."""
+    v = np.asarray(values, dtype=float)
+    return float(np.max(np.maximum(lo - v, v - hi).clip(min=0))) if v.size else np.nan
+
+
+def fold_regimes(df, fold_defs, t_col):
+    """
+    Rodzaj zadania w każdym foldzie, z zakresów etykiet rekordów is_joint_regression:
+        interpolacja      - temperatury i ciśnienia testu leżą w zakresie treningu,
+        ekstrapolacja T/p - część testu leży poza zakresem treningu (dist_* = o ile).
+    gap_T / gap_p - odległość od wartości testowych do najbliższego poziomu w treningu
+    (np. LOTO, fold dT = 0: najbliższa temperatura treningowa 16,2 -> gap_T = 16,2).
+    Uwaga: kryterium dotyczy zakresów osobno dla T i p; blok wycięty ze środka przestrzeni (T, p)
+    jest tu interpolacją, choć danej kombinacji nie ma w treningu.
+    """
+    joint = (df["is_joint_regression"] == True).to_numpy()
+    rows = []
+    for fold_id, (g, mask) in enumerate(fold_defs, start=1):
+        mask = np.asarray(mask, dtype=bool)
+        tr, te = df[~mask & joint], df[mask & joint]
+        if te.empty or tr.empty:
+            continue
+        row = {"fold": fold_id, "test_group": g}
+        kinds = []
+        for col, name in [(t_col, "T"), ("pressure", "p")]:
+            lo, hi = tr[col].min(), tr[col].max()
+            levels = np.unique(tr[col].to_numpy(dtype=float))
+            test_levels = np.unique(te[col].to_numpy(dtype=float))
+            row[f"{name}_test"] = ", ".join(f"{v:g}" for v in test_levels[:6]) + (" ..." if len(test_levels) > 6 else "")
+            row[f"{name}_train_range"] = f"{lo:g} - {hi:g}"
+            row[f"dist_{name}"] = _outside(test_levels, lo, hi)
+            row[f"gap_{name}"] = float(np.max([np.min(np.abs(levels - v)) for v in test_levels]))
+            if row[f"dist_{name}"] > 0:
+                kinds.append(name)
+        row["regime"] = "ekstrapolacja " + "+".join(kinds) if kinds else "interpolacja"
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def regime_comparison(folds, regimes, models, baseline, fold_ids, targets):
+    """
+    Średnie RMSE osobno dla foldów interpolacyjnych i ekstrapolacyjnych (oraz wszystkich).
+    Względem modelu odniesienia: różnica średnich na foldach wspólnych dla pary i liczba foldów,
+    w których model jest lepszy (wins).
+    """
+    reg = regimes.set_index("fold")["regime"]
+    groups = [("wszystkie", list(fold_ids))]
+    for r in sorted(reg.unique(), key=lambda x: (x != "interpolacja", x)):
+        groups.append((r, [f for f in fold_ids if reg.get(f) == r]))
+    ok = folds[folds["status"] == "ok"].set_index(["model", "fold"])
+    rows = []
+    for regime, ids in groups:
+        if not ids:
+            continue
+        for m in models:
+            ids_m = [f for f in ids if (m, f) in ok.index]
+            row = {"regime": regime, "model": m, "n_folds": len(ids_m)}
+            for t in targets:
+                row[f"{t}_rmse"] = ok.loc[[(m, f) for f in ids_m], f"{t}_rmse"].mean() if ids_m else np.nan
+            if baseline and m != baseline:
+                pair = [f for f in ids_m if (baseline, f) in ok.index]
+                for t in targets:
+                    a = ok.loc[[(baseline, f) for f in pair], f"{t}_rmse"].to_numpy(dtype=float)
+                    b = ok.loc[[(m, f) for f in pair], f"{t}_rmse"].to_numpy(dtype=float)
+                    row[f"{t}_diff_vs_baseline"] = float(np.mean(b - a)) if len(pair) else np.nan
+                    row[f"{t}_wins"] = f"{int(np.sum(b < a))}/{len(pair)}"
+            rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def plot_regime_comparison(comp, out_path, targets):
+    regimes = [r for r in comp["regime"].unique() if r != "wszystkie"]
+    if len(regimes) < 2:
+        return
+    models = list(dict.fromkeys(comp["model"]))
+    fig, axes = plt.subplots(1, len(targets), figsize=(6 * len(targets), 4.5))
+    w = 0.8 / len(regimes)
+    x = np.arange(len(models))
+    for ax, t in zip(np.atleast_1d(axes), targets):
+        for i, r in enumerate(regimes):
+            c = comp[comp["regime"] == r].set_index("model").reindex(models)
+            ax.bar(x + (i - (len(regimes) - 1) / 2) * w, c[f"{t}_rmse"], w, label=r)
+        ax.set_xticks(x)
+        ax.set_xticklabels(models, rotation=45, ha="right")
+        ax.set_ylabel(f"RMSE {t} [{TARGET_UNITS.get(t, '')}]")
+        ax.set_yscale("log")
+        ax.grid(axis="y", alpha=0.3)
+    np.atleast_1d(axes)[0].legend()
+    fig.suptitle("RMSE: foldy interpolacyjne vs ekstrapolacyjne (średnia po foldach)")
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=150)
+    plt.close(fig)
+
+
 # ---------------------------------------------------------------- powtarzalność
 
 def signal_drift(df, t_col):
@@ -499,6 +596,16 @@ def build_report(result, df, cfg, out_dir):
                     f"Testy parowane vs {baseline} (foldy referencyjne, w których działają oba modele; n w wierszu)", 4)
         write_table(gain_table(folds, baseline, models, common, targets), out_dir, "gain_vs_baseline",
                     f"Współczynnik zysku G względem {baseline} (RMSE na foldach wspólnych dla pary)", 2)
+
+    regimes = fold_regimes(df, result["fold_defs"], t_col)
+    if not regimes.empty:
+        write_table(regimes, out_dir, "fold_regimes",
+                    "Rodzaj zadania w foldach: interpolacja / ekstrapolacja (zakresy T i p w treningu)", 2)
+        comp = regime_comparison(folds, regimes, models, baseline, common, targets)
+        write_table(comp, out_dir, "regime_comparison",
+                    "RMSE osobno dla foldów interpolacyjnych i ekstrapolacyjnych (foldy referencyjne); "
+                    f"diff = model - {baseline} (ujemne = model lepszy), wins = foldy, w których model lepszy")
+        plot_regime_comparison(comp, os.path.join(out_dir, "rmse_by_regime.png"), targets)
 
     drift = signal_drift(df, t_col)
     if not drift.empty:

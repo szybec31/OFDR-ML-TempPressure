@@ -40,6 +40,8 @@ CONFIG_ALIASES = {
     "rs": "configs/spatial_windows.json",
     "run_drift": "configs/drift_zero_end.json",
     "rd": "configs/drift_zero_end.json",
+    "run_hybrid": "configs/hybrid_extrapolation.json",
+    "rh": "configs/hybrid_extrapolation.json",
     "ablations": "configs/ablations.json",
     "a": "configs/ablations.json",
 }
@@ -93,6 +95,7 @@ HELP = """Użycie: python main.py POLECENIE [POLECENIE ...]
   run_spatial, rs           configs/spatial_windows.json (pkt 7: okna przestrzenne wzdłuż ROI)
   run_roi, rw               configs/roi_windows.json (szerokość ROI: okna 1-100 cm i pełne ROI jako dane uczące)
   run_drift, rd             configs/drift_zero_end.json (zad. 9: dryft zero_end, wskaźnik jakości)
+  run_hybrid, rh            configs/hybrid_extrapolation.json (modele hybrydowe; interpolacja vs ekstrapolacja)
   ablations, a              configs/ablations.json
   experiment PLIK.json      dowolny plik konfiguracyjny
 
