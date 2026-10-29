@@ -1,0 +1,13 @@
+{
+  "name": "drift_zero_end",
+  "description": "Zadanie 9: analiza powtarzalności i dryftu zero_end. zero_end całkowicie poza uczeniem; predykcje dla zero_end i pomiarów z serii są out-of-fold. Tabele repeatability_series_parameters, repeatability_answers, repeatability_quality_flags, repeatability_drift_correction, wykres repeatability_drift.png. Opis wyników: docs/dryft_zero_end.md.",
+  "seed": 42,
+  "features": ["mu_Y", "mu_X", "m", "d", "std_Y", "std_X", "iqr_Y", "iqr_X"],
+  "models": ["AN-BL", "AN-BL-NEAREST", "AN-JOINT", "CD-LIN", "CD-POLY", "MO-LR", "POLY2-RIDGE"],
+  "baseline": "AN-JOINT",
+  "include_zero_end_train": false,
+  "variants": [
+    {"name": "condition", "split": "condition", "inner_cv": {"n_splits": 3, "group": "condition_id"}},
+    {"name": "temperature", "split": "temperature"}
+  ]
+}

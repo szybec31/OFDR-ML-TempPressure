@@ -7,7 +7,7 @@
   "models": ["AN-BL", "AN-BL-NEAREST", "AN-JOINT", "CD-LIN", "CD-POLY", "MO-LR", "POLY2-RIDGE", "SVR-RBF", "NYSTROEM-SVR"],
   "baseline": "AN-JOINT",
   "model_params": {
-    "AN-BL": {"calibration_temperature": null, "calibration_pressure": 16.2},
-    "AN-BL-NEAREST": {"calibration_temperature": null, "calibration_pressure": 16.2}
+    "AN-BL": {"calibration_temperature": null, "calibration_pressure": 0.0},
+    "AN-BL-NEAREST": {"calibration_temperature": null, "calibration_pressure": 0.0}
   }
 }

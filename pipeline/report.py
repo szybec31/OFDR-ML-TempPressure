@@ -242,6 +242,45 @@ def residual_drift(predictions, drift, targets):
     return z
 
 
+def drift_report(df, preds, summary_common, rd, cfg, targets, out_dir):
+    """Zadanie 9: parametry dryftu każdej serii, odpowiedzi na 5 pytań, wskaźnik jakości (pipeline/drift.py)."""
+    from . import drift as dr
+    p_col, t_col = targets
+    times = dr.acquisition_times(df, cfg.get("acquisition_times_cache", "Output_files/acquisition_times.csv"))
+    seq = dr.series_sequence(df, times)
+    pairs, _ = dr.drift_pairs(df, t_col, float(cfg.get("temperature_reference", 0.0)))
+    if pairs.empty:
+        return
+    params = dr.series_parameters(df, pairs, seq, t_col)
+    # wskaźnik jakości odnoszony do RMSE modelu fizycznego AN-JOINT (albo modelu odniesienia)
+    ref = "AN-JOINT" if "AN-JOINT" in set(summary_common["model"]) else cfg.get("baseline")
+    r = summary_common.set_index("model").loc[ref]
+    rmse_ref = {"T": float(r[f"{t_col}_rmse_mean"]), "p": float(r[f"{p_col}_rmse_mean"])}
+    check = dr.drift_correction_check(preds, params, times, targets, cfg["models"])
+    rd_ref = None
+    if not rd.empty and ref in set(rd["model"]):
+        rd_ref = residual_drift_summary(rd).set_index("model").loc[ref]
+
+    write_table(seq, out_dir, "repeatability_series_sequence",
+                "Przebieg serii z czasów akwizycji (kierunek ciśnienia, czas zero_start -> zero_end)", 3)
+    write_table(params, out_dir, "repeatability_series_parameters",
+                "Parametry dryftu każdej serii: ΔX0, ΔY0, Δm0 = (ΔX0+ΔY0)/2, Δd0 = ΔX0-ΔY0 [GHz] "
+                "(zero_end - zero_start) i ich przeliczenie na T i p (AN-JOINT bez zero_end)", 4)
+    write_table(dr.quality_flags(params, rmse_ref)[["series_id", t_col, "dT_drift", "dp_drift", "Q_T", "Q_p", "Q", "flag"]],
+                out_dir, "repeatability_quality_flags",
+                f"Wskaźnik jakości Q = max(|ΔT_drift|/RMSE_T, |Δp_drift|/RMSE_p), RMSE z {ref}", 3)
+    if not check.empty:
+        write_table(check, out_dir, "repeatability_drift_correction",
+                    "Weryfikacja wskaźnika: RMSE predykcji out-of-fold przed/po liniowej korekcie dryftu w czasie", 4)
+    profile = dr.series_error_profile(preds, params, times, targets, ref)
+    if not profile.empty:
+        write_table(profile, out_dir, "repeatability_error_profile",
+                    f"Przebieg błędu T ({ref}, out-of-fold) w czasie serii: skoki przy starcie / końcu vs nachylenie", 3)
+    write_table(dr.answers(params, pairs, rmse_ref, check, t_col, rd_ref, profile), out_dir, "repeatability_answers",
+                f"Dryft zero_end - odpowiedzi na pytania z zadania 9 (odniesienie: {ref})")
+    dr.plot_drift(params, pairs, t_col, os.path.join(out_dir, "repeatability_drift.png"))
+
+
 def residual_drift_summary(rd):
     if rd.empty:
         return pd.DataFrame()
@@ -477,6 +516,9 @@ def build_report(result, df, cfg, out_dir):
         rd.to_csv(os.path.join(out_dir, "repeatability_residual_drift.csv"), index=False)
         write_table(residual_drift_summary(rd), out_dir, "repeatability_residual_drift_summary",
                     "Residual Drift na zero_end (predykcje out-of-fold)", 4)
+
+    if not windowed and (df["point_type"] == "zero_end").any():
+        drift_report(df, preds, summary_common, rd, cfg, targets, out_dir)
 
     write_table(result["split_diagnostics"], out_dir, "split_diagnostics", "Diagnostyka podziałów (wspólne serie train/test)")
 

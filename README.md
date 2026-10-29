@@ -38,6 +38,7 @@ New to the project? Start with the guide (in Polish): [docs/przewodnik_po_projek
    python main.py run_block                             # configs/block_holdout.json (held-out regions of the T, p space)
    python main.py run_reduced                           # configs/reduced_calibration.json (fewer calibration states, task 6)
    python main.py run_spatial                           # configs/spatial_windows.json (spatial windows along the ROI, task 7)
+   python main.py run_drift                             # configs/drift_zero_end.json (task 9: zero_end drift, quality index; docs/dryft_zero_end.md)
    python main.py run_roi                               # configs/roi_windows.json (ROI width: 1-100 cm windows as training samples)
    python main.py experiment configs/analytical_dT_vs_Tp.json  # analytical models, dT vs Tp, 4 validation schemes (~30 s)
    python main.py experiment configs/my_experiment.json # any config

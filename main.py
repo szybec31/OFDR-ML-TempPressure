@@ -38,6 +38,8 @@ CONFIG_ALIASES = {
     "rw": "configs/roi_windows.json",
     "run_spatial": "configs/spatial_windows.json",
     "rs": "configs/spatial_windows.json",
+    "run_drift": "configs/drift_zero_end.json",
+    "rd": "configs/drift_zero_end.json",
     "ablations": "configs/ablations.json",
     "a": "configs/ablations.json",
 }
@@ -90,6 +92,7 @@ HELP = """Użycie: python main.py POLECENIE [POLECENIE ...]
   run_reduced, rr           configs/reduced_calibration.json (pkt 6: ograniczenie liczby stanów kalibracyjnych)
   run_spatial, rs           configs/spatial_windows.json (pkt 7: okna przestrzenne wzdłuż ROI)
   run_roi, rw               configs/roi_windows.json (szerokość ROI: okna 1-100 cm i pełne ROI jako dane uczące)
+  run_drift, rd             configs/drift_zero_end.json (zad. 9: dryft zero_end, wskaźnik jakości)
   ablations, a              configs/ablations.json
   experiment PLIK.json      dowolny plik konfiguracyjny
 

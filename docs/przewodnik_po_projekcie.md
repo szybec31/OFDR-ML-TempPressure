@@ -307,6 +307,7 @@ Mają własny kod, ale ten sam mechanizm configów (klucz `"experiment"`).
 | `ablations` | zwykłe CV z wariantami | które elementy pipeline'u są potrzebne? | 4 vs 8 cech, jeden kanał, brak korekty etykiet, zero_end w treningu |
 | `run_reduced` | [pipeline/reduced_calibration.py](../pipeline/reduced_calibration.py) + [calibration_design.py](../pipeline/calibration_design.py) | ile stanów kalibracyjnych naprawdę potrzeba? | [pkt6_7.md](pkt6_7.md) |
 | `run_spatial` | [pipeline/spatial.py](../pipeline/spatial.py) | jak dokładność zależy od długości okna wzdłuż włókna? | [pkt6_7.md](pkt6_7.md) |
+| `run_drift` | [pipeline/drift.py](../pipeline/drift.py) + zwykłe CV | zadanie 9: dryft zero_end, wpływ na T i p, wskaźnik jakości | [dryft_zero_end.md](dryft_zero_end.md) |
 | `run_roi` | [pipeline/roi_windows.py](../pipeline/roi_windows.py) + zwykłe CV | czy dzielenie ROI na okna (więcej wierszy uczących) poprawia modele? | niżej |
 
 `run_spatial` i `run_roi` wracają do surowych plików `.txt`. Za pierwszym razem zapisują cache:
