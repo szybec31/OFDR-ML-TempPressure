@@ -74,18 +74,26 @@ def run_cv(df, cfg):
     fold_rows, pred_rows, coef_rows = [], [], []
     # dT i Tp zawsze zapisywane jako metadane; prawdziwa wartość celu jest w kolumnie t_col
     meta_cols = ["sample_id", "series_id", "rep_idx", "dT", "Tp", "pressure", "point_type"]
+    windowed = "window" in df.columns
+    if windowed:
+        meta_cols += ["window", "z_center_m"]
+    per_sample = cfg.get("train_windows_per_sample") if windowed else None
 
     n_folds = len(folds)
 
     for fold_id, (g, mask) in enumerate(folds, start=1):
         in_test = pd.Series(mask, index=df.index)
         train = df[~in_test]
+        if per_sample:
+            # losowo co najwyżej `per_sample` okien z każdej próbki treningowej (test zawsze pełny)
+            train = (train.sample(frac=1.0, random_state=seed + fold_id)
+                     .groupby("sample_id", sort=False).head(int(per_sample)).sort_index())
         test_main = df[in_test & is_joint]
         test_zero_end = df[in_test & is_zero_end]
 
         print(f"\n>>> FOLD {fold_id}/{n_folds}: test = {g}  (test={len(test_main)}, zero_end={len(test_zero_end)})")
 
-        ml_train = train[is_joint[~in_test] | (cfg.get("include_zero_end_train", False) & is_zero_end[~in_test])]
+        ml_train = train[is_joint[train.index] | (cfg.get("include_zero_end_train", False) & is_zero_end[train.index])]
 
         for spec in specs:
             t0 = time.time()

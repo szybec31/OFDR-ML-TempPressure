@@ -38,6 +38,7 @@ New to the project? Start with the guide (in Polish): [docs/przewodnik_po_projek
    python main.py run_block                             # configs/block_holdout.json (held-out regions of the T, p space)
    python main.py run_reduced                           # configs/reduced_calibration.json (fewer calibration states, task 6)
    python main.py run_spatial                           # configs/spatial_windows.json (spatial windows along the ROI, task 7)
+   python main.py run_roi                               # configs/roi_windows.json (ROI width: 1-100 cm windows as training samples)
    python main.py experiment configs/analytical_dT_vs_Tp.json  # analytical models, dT vs Tp, 4 validation schemes (~30 s)
    python main.py experiment configs/my_experiment.json # any config
    ```
@@ -64,6 +65,16 @@ New to the project? Start with the guide (in Polish): [docs/przewodnik_po_projek
    local vs global calibration), `min_window_length.*`, `window_rmse_profiles.csv`, `window_rmse_L*cm.png`,
    `outlier_windows.*`, `sensitivity_L*cm.*` and `sensitivity_homogeneity.*` (local sensitivities along the fiber).
    The first run reads all raw files once and caches 1 cm bins in `Output_files/spatial_bins_1cm.npz`.
+
+   `run_roi` (key `"roi_window_cm"`, any CV config): the ROI is split into non-overlapping windows of length L
+   (1, 2, 5, 10, 25, 50, 100 cm; `"full"` = whole ROI = `paired_features.csv`). Every window gives one row with the
+   same features (mu, std, IQR, m, d), so each X/Y sample yields many training rows; all windows of a sample share
+   its labels and groups, so they never end up on both sides of a split. Extra outputs: `results_table_sample_level.*`
+   (prediction of a sample = mean over its windows, comparable with the full ROI), `variants_table_sample_level.*`
+   and `rmse_vs_roi_window.png`; predictions are saved as `predictions.csv.gz`. Window features are cached in
+   `Output_files/roi_windows/L<L>cm.npz` (built once, ~20 s). Optional: `"train_windows_per_sample": N` keeps
+   N random windows per training sample (for slow models), `"roi_window_min_coverage"` (default 0.8),
+   and the column `z_center_m` (window position) can be added to `features`.
 
    Temperature target (any config):
    ```

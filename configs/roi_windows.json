@@ -1,0 +1,23 @@
+{
+  "name": "roi_windows",
+  "description": "Szerokość ROI: ROI 8,5-12 m (350 cm) dzielone na niepokrywające się okna o długości L; z każdego okna liczone są te same cechy co z pełnego ROI (mu, std, IQR, m, d), więc każda próbka X/Y daje wiele wierszy treningowych. Pełne ROI = dzisiejszy paired_features. Wyniki na poziomie okna (results_table) i próbki - średnia predykcji z okien (results_table_sample_level); zbiorczo: variants_table_sample_level i rmse_vs_roi_window.png. Bez SVR/Nyström/RF ze względu na liczbę wierszy (L = 1 cm: ok. 420 tys.).",
+  "seed": 42,
+  "split": "condition",
+  "inner_cv": {"n_splits": 3, "group": "condition_id"},
+  "features": ["mu_Y", "mu_X", "m", "d", "std_Y", "std_X", "iqr_Y", "iqr_X"],
+  "models": ["AN-BL", "AN-BL-NEAREST", "AN-JOINT", "CD-LIN", "CD-POLY", "MO-LR", "POLY2-RIDGE"],
+  "baseline": "AN-BL",
+  "grids": {"POLY2-RIDGE": {"ridge__alpha": [0.001, 0.01, 0.1, 1, 10, 100]}},
+  "roi_window_min_coverage": 0.8,
+  "train_windows_per_sample": null,
+  "variants": [
+    {"name": "L001cm", "roi_window_cm": 1},
+    {"name": "L002cm", "roi_window_cm": 2},
+    {"name": "L005cm", "roi_window_cm": 5},
+    {"name": "L010cm", "roi_window_cm": 10},
+    {"name": "L025cm", "roi_window_cm": 25},
+    {"name": "L050cm", "roi_window_cm": 50},
+    {"name": "L100cm", "roi_window_cm": 100},
+    {"name": "full", "roi_window_cm": "full"}
+  ]
+}

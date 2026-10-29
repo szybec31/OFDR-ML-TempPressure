@@ -227,6 +227,7 @@ Najważniejsze klucze (wartości domyślne są w `DEFAULTS` w [pipeline/runner.p
 | `inner_cv` | wewnętrzne strojenie: liczba podziałów i kolumna grupująca (`series_id` albo `condition_id`) |
 | `grids` | nadpisanie siatek hiperparametrów |
 | `model_params` | nadpisanie parametrów modeli, np. punkt kalibracji AN-BL / AN-BL-NEAREST: `calibration_temperature` (jednostki celu, `null` = ΔT = 0), `calibration_pressure` (MPa, domyślnie 0), `pressure_calibration` (`strict` / `nearest_temperature`), `temperature_calibration` (`strict` / `nearest_pressure`) |
+| `roi_window_cm` | `"full"` (domyślnie) albo długość okna ROI w cm; patrz punkt 8 |
 | `variants` | lista wariantów; każdy nadpisuje dowolne klucze i trafia do osobnego podkatalogu |
 
 ### Co dzieje się po uruchomieniu (`runner.run_from_config`)
@@ -306,9 +307,21 @@ Mają własny kod, ale ten sam mechanizm configów (klucz `"experiment"`).
 | `ablations` | zwykłe CV z wariantami | które elementy pipeline'u są potrzebne? | 4 vs 8 cech, jeden kanał, brak korekty etykiet, zero_end w treningu |
 | `run_reduced` | [pipeline/reduced_calibration.py](../pipeline/reduced_calibration.py) + [calibration_design.py](../pipeline/calibration_design.py) | ile stanów kalibracyjnych naprawdę potrzeba? | [pkt6_7.md](pkt6_7.md) |
 | `run_spatial` | [pipeline/spatial.py](../pipeline/spatial.py) | jak dokładność zależy od długości okna wzdłuż włókna? | [pkt6_7.md](pkt6_7.md) |
+| `run_roi` | [pipeline/roi_windows.py](../pipeline/roi_windows.py) + zwykłe CV | czy dzielenie ROI na okna (więcej wierszy uczących) poprawia modele? | niżej |
 
-`run_spatial` jako jedyny wraca do surowych plików `.txt`. Za pierwszym razem zapisuje cache
-`Output_files/spatial_bins_1cm.npz`.
+`run_spatial` i `run_roi` wracają do surowych plików `.txt`. Za pierwszym razem zapisują cache:
+`Output_files/spatial_bins_1cm.npz` i `Output_files/roi_windows/L<L>cm.npz`.
+
+**Szerokość ROI (`run_roi`, klucz `"roi_window_cm"`).** Domyślnie (`"full"`) jedna para X/Y to jeden wiersz
+z cechami z całego ROI (350 cm). Przy `"roi_window_cm": L` ROI jest dzielone na niepokrywające się okna
+o długości L (1, 2, 5, 10, 25, 50, 100 cm). Z każdego okna liczone są te same cechy (μ, std, IQR, m, d), więc
+jedna próbka daje do 350 wierszy uczących. Okna jednej próbki mają wspólne etykiety i grupy, więc nigdy nie
+trafiają jednocześnie do treningu i testu. Wyniki są na dwóch poziomach:
+- `results_table`: błąd pojedynczego okna,
+- `results_table_sample_level`: predykcja próbki = średnia z jej okien; porównywalne z pełnym ROI.
+
+Różnica względem `run_spatial`: tam okna służą do lokalnej kalibracji i profili czułości (dwa proste
+modele), tutaj są dodatkowymi wierszami uczącymi dla wszystkich modeli w zwykłej walidacji.
 
 ---
 
@@ -392,6 +405,7 @@ OFDR-ML-TempPressure/
 ├─ utils.py                 naprawa folderu DT16.2, czytanie .txt, czyszczenie ROI (clean_roi), stałe ROI
 ├─ configs/                 definicje eksperymentów (JSON)
 ├─ pipeline/
+│  ├─ roi_windows.py        cechy w oknach ROI (szerokość ROI jako parametr eksperymentu)
 │  ├─ runner.py             config → dane → CV → raport → katalog wyników; warianty, metadane
 │  ├─ splits.py             schematy podziału na foldy
 │  ├─ cv.py                 pętla po foldach, strojenie (GridSearchCV + GroupKFold), predykcje

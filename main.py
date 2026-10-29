@@ -34,6 +34,8 @@ CONFIG_ALIASES = {
     "rb": "configs/block_holdout.json",
     "run_reduced": "configs/reduced_calibration.json",
     "rr": "configs/reduced_calibration.json",
+    "run_roi": "configs/roi_windows.json",
+    "rw": "configs/roi_windows.json",
     "run_spatial": "configs/spatial_windows.json",
     "rs": "configs/spatial_windows.json",
     "ablations": "configs/ablations.json",
@@ -87,6 +89,7 @@ HELP = """Użycie: python main.py POLECENIE [POLECENIE ...]
   run_block, rb             configs/block_holdout.json (usunięcie fragmentów przestrzeni T, p)
   run_reduced, rr           configs/reduced_calibration.json (pkt 6: ograniczenie liczby stanów kalibracyjnych)
   run_spatial, rs           configs/spatial_windows.json (pkt 7: okna przestrzenne wzdłuż ROI)
+  run_roi, rw               configs/roi_windows.json (szerokość ROI: okna 1-100 cm i pełne ROI jako dane uczące)
   ablations, a              configs/ablations.json
   experiment PLIK.json      dowolny plik konfiguracyjny
 

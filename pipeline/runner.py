@@ -6,7 +6,7 @@ Uruchomienie eksperymentu z pliku konfiguracyjnego JSON.
 Struktura konfiguracji (wszystkie klucze poza "name" mają wartości domyślne z DEFAULTS):
     name, description, seed, data, drop_low_quality, temperature_target, temperature_reference,
     split, blocks, inner_cv, n_jobs, features, models, baseline, common_folds, grids, model_params,
-    include_zero_end_train,
+    include_zero_end_train, roi_window_cm, roi_window_min_coverage, train_windows_per_sample,
     variants: [ {name, ...dowolne nadpisania powyższych kluczy...}, ... ]   (opcjonalne)
 
 Klucz "experiment" wybiera rodzaj eksperymentu:
@@ -33,7 +33,8 @@ import pandas as pd
 from .cv import run_cv
 from .models import get_model_spec
 from .reduced_calibration import run_reduced_calibration
-from .report import build_report, compact_summary, write_table
+from .roi_windows import window_table
+from .report import build_report, compact_summary, plot_rmse_vs_window, write_table
 from .spatial import run_spatial
 from .metrics import TEMPERATURE_TARGETS, get_targets, temperature_target
 from .splits import condition_labels, split_diagnostics
@@ -67,6 +68,13 @@ DEFAULTS = {
         "AN-BL-NEAREST": {"calibration_temperature": None, "calibration_pressure": 0.0},
     },
     "include_zero_end_train": False,
+    # szerokość ROI (pipeline/roi_windows.py): "full" = całe ROI 8,5-12 m (paired_features.csv),
+    # liczba [cm] = ROI dzielone na okna o tej długości, jeden wiersz na (próbkę, okno)
+    "roi_window_cm": "full",
+    "roi_window_min_coverage": 0.8,          # minimalne pokrycie okna punktami po czyszczeniu
+    "roi_window_cache_dir": "Output_files/roi_windows",
+    "roi_window_cache_lengths": [1, 2, 5, 10, 25, 50, 100],
+    "train_windows_per_sample": None,        # opcjonalnie: losowo tyle okien na próbkę w treningu
     "exclude_test_groups": [],    # foldy pomijane (reduced_calibration, spatial), np. ["dT=0.0"]
     "training_dataset": "Output_files/training_dataset.csv",
     "bin_cache": "Output_files/spatial_bins_{base}cm.npz",
@@ -120,6 +128,9 @@ def load_data(cfg):
     t_col = temperature_target(cfg)
     if t_col not in df.columns:
         raise RuntimeError(f"W {cfg['data']} brak kolumny celu temperaturowego {t_col!r}.")
+    if str(cfg.get("roi_window_cm", "full")) != "full":
+        # rozwinięcie do poziomu okien ROI (przed filtrem jakości - cache obejmuje wszystkie próbki)
+        df = window_table(cfg, df, cfg["roi_window_cm"])
     if cfg["drop_low_quality"]:
         df = df[df["low_quality"] == False]
     # identyfikator warunku pomiarowego (T, p) - grupy dla leave-one-condition-out i strojenia wewnętrznego
@@ -214,7 +225,7 @@ def run_from_config(path):
     if not variants:
         variants = [{}]
 
-    rows = []
+    rows, rows_samples = [], []
     for v in variants:
         cfg = copy.deepcopy(base)
         cfg.update(v)
@@ -232,6 +243,11 @@ def run_from_config(path):
         s.insert(0, "variant", v.get("name", base["name"]))
         s.insert(2, "common_folds", str(info["common_folds"]))
         rows.append(s)
+        # poziom próbki: przy oknach ROI średnia predykcji z okien; przy pełnym ROI = tabela główna
+        ss = (info["summary_samples"] if info.get("summary_samples") is not None else info["summary_common"]).copy()
+        ss.insert(0, "variant", v.get("name", base["name"]))
+        ss.insert(1, "roi_window_cm", str(cfg.get("roi_window_cm", "full")))
+        rows_samples.append(ss)
 
     if len(variants) > 1 and rows:
         summary = pd.concat(rows, ignore_index=True)
@@ -239,6 +255,14 @@ def run_from_config(path):
         cols = ["variant", "model", "n_folds"] + [c for c in summary.columns
                                                  if c.endswith("_mean") and ("mae" in c or "rmse" in c)]
         write_table(summary[cols], run_dir, "variants_table", "Porównanie wariantów (średnie po wspólnych foldach)")
+        samples = pd.concat(rows_samples, ignore_index=True)
+        if samples["roi_window_cm"].nunique() > 1:
+            cols_s = ["variant", "roi_window_cm", "model", "n_folds"] + [
+                c for c in samples.columns if c.endswith("_mean") and ("mae" in c or "rmse" in c)]
+            write_table(samples[cols_s], run_dir, "variants_table_sample_level",
+                        "Porównanie wariantów na poziomie próbki (predykcja = średnia z okien ROI)")
+            win = summary.assign(roi_window_cm=samples["roi_window_cm"].to_numpy())
+            plot_rmse_vs_window(win, samples, os.path.join(run_dir, "rmse_vs_roi_window.png"), get_targets(base))
 
     meta["finished"] = datetime.now().isoformat(timespec="seconds")
     with open(os.path.join(run_dir, "run_meta.json"), "w", encoding="utf-8") as f:

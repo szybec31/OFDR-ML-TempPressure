@@ -197,18 +197,23 @@ def gain_table(folds, baseline, models, fold_ids, targets):
 # ---------------------------------------------------------------- powtarzalność
 
 def signal_drift(df, t_col):
-    """Dryft sygnału zero_end względem zero_start z tej samej serii i tego samego powtórzenia."""
-    start = df[df["point_type"] == "zero_start"].set_index("sample_id")
+    """
+    Dryft sygnału zero_end względem zero_start z tej samej serii i tego samego powtórzenia
+    (przy oknach ROI: także z tego samego okna).
+    """
+    keys = ["sample_id", "window"] if "window" in df.columns else ["sample_id"]
+    start = df[df["point_type"] == "zero_start"].set_index(keys)
     end = df[df["point_type"] == "zero_end"]
     rows = []
     for _, e in end.iterrows():
-        if e["ref"] not in start.index:
+        key = (e["ref"], e["window"]) if len(keys) == 2 else e["ref"]
+        if key not in start.index:
             continue
-        s = start.loc[e["ref"]]
+        s = start.loc[key]
         dx, dy = e["mu_X"] - s["mu_X"], e["mu_Y"] - s["mu_Y"]
         rows.append({
             "sample_id": e["sample_id"], "series_id": e["series_id"], t_col: e[t_col],
-            "rep_idx": e["rep_idx"],
+            "rep_idx": e["rep_idx"], **({"window": e["window"]} if len(keys) == 2 else {}),
             "delta_mu_X": dx, "delta_mu_Y": dy,
             "delta_m": (dx + dy) / 2,       # składowa wspólna (m)
             "delta_d": dx - dy,             # składowa różnicowa (d)
@@ -232,7 +237,8 @@ def residual_drift(predictions, drift, targets):
     z["err_pressure"] = z[f"{p_col}_pred"] - 0.0
     z["RD"] = np.hypot(z["err_T"], z["err_pressure"])
     if not drift.empty:
-        z = z.merge(drift[["sample_id", "delta_m", "delta_d"]], on="sample_id", how="left")
+        keys = ["sample_id", "window"] if "window" in drift.columns and "window" in z.columns else ["sample_id"]
+        z = z.merge(drift[keys + ["delta_m", "delta_d"]], on=keys, how="left")
     return z
 
 
@@ -307,6 +313,54 @@ def plot_rmse_per_fold(folds, models, out_dir, targets, run_name=""):
         plt.close(fig)
 
 
+MAX_PLOT_POINTS = 20000   # przy oknach ROI predykcji są setki tysięcy - wykresy na próbce
+
+
+def _plot_sample(df, seed=0):
+    return df.sample(MAX_PLOT_POINTS, random_state=seed) if len(df) > MAX_PLOT_POINTS else df
+
+
+def sample_level_folds(predictions, targets):
+    """
+    Okna ROI: predykcja próbki = średnia predykcji z jej okien; metryki liczone na próbkach,
+    osobno w każdym foldzie (ten sam format co folds.csv, status ok). Porównywalne z pełnym ROI.
+    """
+    test = predictions[predictions["subset"] == "test"]
+    pred_cols = [f"{t}_pred" for t in targets]
+    agg = test.groupby(["fold", "test_group", "model", "sample_id"], sort=False)[targets + pred_cols].mean()
+    rows = []
+    for (fold, g, model), part in agg.groupby(level=["fold", "test_group", "model"], sort=False):
+        rows.append({"fold": fold, "test_group": g, "model": model, "status": "ok", "n_test": len(part),
+                     **evaluate(part[targets], part[pred_cols].to_numpy(), targets)})
+    return pd.DataFrame(rows)
+
+
+def plot_rmse_vs_window(window_level, sample_level, out_path, targets):
+    """RMSE w funkcji szerokości okna ROI: linia ciągła = poziom okna, przerywana = poziom próbki."""
+    def length(v):
+        return 350.0 if str(v) == "full" else float(v)
+    fig, axes = plt.subplots(1, 2, figsize=(13, 4.8))
+    for ax, t in zip(axes, targets):
+        col = f"{t}_rmse_mean"
+        for i, (model, g) in enumerate(sample_level.groupby("model", sort=False)):
+            color = f"C{i % 10}"
+            g = g.assign(L=g["roi_window_cm"].map(length)).sort_values("L")
+            ax.plot(g["L"], g[col], marker="o", ms=4, ls="--", color=color, label=f"{model} (próbka)")
+            w = window_level[window_level["model"] == model]
+            w = w.assign(L=w["roi_window_cm"].map(length)).sort_values("L")
+            ax.plot(w["L"], w[col], marker=".", ms=4, ls="-", color=color, alpha=0.6)
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+        ax.set_xlabel("szerokość okna ROI L [cm] (350 = pełne ROI)")
+        ax.set_ylabel(f"RMSE {t} [{TARGET_UNITS[t]}]")
+        ax.grid(True, which="both", alpha=0.3)
+    axes[0].legend(fontsize=7, ncol=2)
+    fig.suptitle("RMSE vs szerokość okna ROI (ciągła: pojedyncze okno, przerywana: średnia z okien próbki)")
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=150)
+    plt.close(fig)
+
+
 def plot_pred_vs_true(predictions, models, fold_ids, out_path, targets):
     test = predictions[(predictions["subset"] == "test") & predictions["fold"].isin(fold_ids)]
     models = [m for m in models if m in set(test["model"])]
@@ -314,7 +368,7 @@ def plot_pred_vs_true(predictions, models, fold_ids, out_path, targets):
         return
     fig, axes = plt.subplots(len(models), 2, figsize=(9, 3.2 * len(models)), squeeze=False)
     for i, m in enumerate(models):
-        p = test[test["model"] == m]
+        p = _plot_sample(test[test["model"] == m])
         for j, t in enumerate(targets):
             ax = axes[i, j]
             ax.scatter(p[t], p[f"{t}_pred"], s=6, alpha=0.5)
@@ -351,8 +405,10 @@ def build_report(result, df, cfg, out_dir):
     models, baseline = cfg["models"], cfg.get("baseline")
     targets = get_targets(cfg)
     t_col = targets[1]
+    windowed = "window" in preds.columns
     folds.to_csv(os.path.join(out_dir, "folds.csv"), index=False)
-    preds.to_csv(os.path.join(out_dir, "predictions.csv"), index=False)
+    # okna ROI: predykcji są miliony wierszy - zapis skompresowany
+    preds.to_csv(os.path.join(out_dir, "predictions.csv.gz" if windowed else "predictions.csv"), index=False)
     if not result["coefficients"].empty:
         write_table(result["coefficients"], out_dir, "physical_coefficients", "Współczynniki modeli analitycznych per fold", 6)
 
@@ -388,6 +444,17 @@ def build_report(result, df, cfg, out_dir):
     write_table(pooled_metrics(preds, models, common, targets), out_dir, "pooled_metrics",
                 "Metryki pooled (predykcje ze wspólnych foldów złączone), w tym R^2 globalne")
 
+    summary_samples = None
+    if windowed:
+        # metryki na poziomie próbki (średnia predykcji z okien) - porównywalne z pełnym ROI
+        sf = sample_level_folds(preds, targets)
+        sf.to_csv(os.path.join(out_dir, "folds_sample_level.csv"), index=False)
+        summary_samples = summarize(sf, models, targets, common)
+        write_table(summary_samples, out_dir, "summary_common_folds_sample_level")
+        write_table(compact_summary(summary_samples, targets), out_dir, "results_table_sample_level",
+                    "Wyniki na poziomie próbki: predykcja = średnia z okien ROI danej próbki "
+                    f"(foldy referencyjne {len(common)}/{len(all_folds)}), średnia (std) po foldach")
+
     if baseline and len(common) >= 2:
         write_table(paired_tests(folds, baseline, models, common, targets), out_dir, "paired_tests",
                     f"Testy parowane vs {baseline} (foldy referencyjne, w których działają oba modele; n w wierszu)", 4)
@@ -420,4 +487,4 @@ def build_report(result, df, cfg, out_dir):
     plot_residual_hist(preds, models, common, os.path.join(out_dir, "residuals_hist.png"), targets)
 
     return {"common_folds": common, "excluded_folds": excluded, "summary_common": summary_common,
-            "common_folds_policy": policy}
+            "summary_samples": summary_samples, "common_folds_policy": policy}
