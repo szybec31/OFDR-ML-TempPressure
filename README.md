@@ -87,12 +87,17 @@ New to the project? Start with the guide (in Polish): [docs/przewodnik_po_projek
      gets status `not_identifiable` - no hidden default coefficients,
    - `"baseline"` sets the reference model (paired tests, gain G). `"common_folds"` chooses the folds of the
      main table: `"baseline"` (default) - folds where the reference model is valid, `"all"` - folds where every
-     model is valid, or a list of model names. Example: with `"baseline": "AN-BL-NEAREST"` leave-one-temperature-out
+     model is valid, or a list of model names. Example: with `"baseline": "AN-JOINT"` leave-one-temperature-out
      uses all 9/9 folds, and AN-BL (N/A for dT = 0) is shown with `n_folds = 8`. Paired tests and G are computed
      per pair, on the folds where both models are valid; `n_folds` is reported in every row,
    - per-fold R^2 is reported only where the target varies inside the fold; pooled R^2 is a separate table,
    - `zero_end` samples are never used for training (unless a config sets `include_zero_end_train`)
-     and never enter the main test metrics.
+     and never enter the main test metrics,
+   - `"model_params"` overrides model constructor parameters. For AN-BL / AN-BL-NEAREST it sets the calibration
+     point: `calibration_temperature` (target units, `null` = dT = 0) for C and `calibration_pressure` (MPa,
+     default 0) for A, B. AN-BL-NEAREST falls back to the nearest available temperature / pressure level when
+     the calibration point is missing from the training fold,
+   - every run saves `rmse_per_fold/<model>.png` - RMSE of pressure and temperature in each fold, one figure per model.
 
 7. Run jupyterlab (*optional)
    ```

@@ -226,6 +226,7 @@ Najważniejsze klucze (wartości domyślne są w `DEFAULTS` w [pipeline/runner.p
 | `temperature_target` | `"dT"` (domyślnie) albo `"Tp"` |
 | `inner_cv` | wewnętrzne strojenie: liczba podziałów i kolumna grupująca (`series_id` albo `condition_id`) |
 | `grids` | nadpisanie siatek hiperparametrów |
+| `model_params` | nadpisanie parametrów modeli, np. punkt kalibracji AN-BL / AN-BL-NEAREST: `calibration_temperature` (jednostki celu, `null` = ΔT = 0), `calibration_pressure` (MPa, domyślnie 0), `pressure_calibration` (`strict` / `nearest_temperature`), `temperature_calibration` (`strict` / `nearest_pressure`) |
 | `variants` | lista wariantów; każdy nadpisuje dowolne klucze i trafia do osobnego podkatalogu |
 
 ### Co dzieje się po uruchomieniu (`runner.run_from_config`)
@@ -261,7 +262,7 @@ Rejestr: [pipeline/models.py](../pipeline/models.py), implementacje: [baselines/
 | model | rodzaj | cechy | opis |
 |---|---|---|---|
 | **AN-BL** | analityczny | μ_X, μ_Y | model z artykułu, kalibracja sekwencyjna: A, B z p = 0, C z serii ΔT = 0 |
-| **AN-BL-NEAREST** | analityczny | μ_X, μ_Y | jak AN-BL; bez serii ΔT = 0 bierze C z najniższej dostępnej temperatury |
+| **AN-BL-NEAREST** | analityczny | μ_X, μ_Y | jak AN-BL; bez serii kalibracyjnej ΔT bierze C z najbliższej dostępnej temperatury, a bez punktów kalibracyjnego p bierze A, B z najbliższego dostępnego poziomu ciśnienia |
 | **AN-JOINT** | analityczny | μ_X, μ_Y | ta sama fizyka, wszystkie współczynniki dopasowane razem na wszystkich danych |
 | **CD-LIN** | ML | m, d | regresja liniowa na składowej wspólnej i różnicowej |
 | **CD-POLY** | ML | m, d | wielomian 2. stopnia (m, d, m², d², m·d) z regularyzacją Ridge |

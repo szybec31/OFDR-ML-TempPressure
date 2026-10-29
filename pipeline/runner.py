@@ -5,7 +5,8 @@ Uruchomienie eksperymentu z pliku konfiguracyjnego JSON.
 
 Struktura konfiguracji (wszystkie klucze poza "name" mają wartości domyślne z DEFAULTS):
     name, description, seed, data, drop_low_quality, temperature_target, temperature_reference,
-    split, blocks, inner_cv, n_jobs, features, models, baseline, common_folds, grids, include_zero_end_train,
+    split, blocks, inner_cv, n_jobs, features, models, baseline, common_folds, grids, model_params,
+    include_zero_end_train,
     variants: [ {name, ...dowolne nadpisania powyższych kluczy...}, ... ]   (opcjonalne)
 
 Klucz "experiment" wybiera rodzaj eksperymentu:
@@ -56,6 +57,15 @@ DEFAULTS = {
     "baseline": "AN-BL",          # model odniesienia (testy parowane, zysk G); null = brak
     "common_folds": "baseline",   # foldy tabeli głównej: "baseline" (działa odniesienie) | "all" | [modele]
     "grids": {},
+    # nadpisania parametrów modeli; dla AN-BL / AN-BL-NEAREST punkt kalibracji:
+    #   calibration_temperature - temperatura (jednostki celu) serii kalibracji C; null = T_ref (dT = 0)
+    #   calibration_pressure    - ciśnienie [MPa] punktów kalibracji A, B (domyślnie 0)
+    #   pressure_calibration    - strict | nearest_temperature (gdy brak calibration_temperature w treningu)
+    #   temperature_calibration - strict | nearest_pressure   (gdy brak calibration_pressure w treningu)
+    "model_params": {
+        "AN-BL": {"calibration_temperature": None, "calibration_pressure": 0.0},
+        "AN-BL-NEAREST": {"calibration_temperature": None, "calibration_pressure": 0.0},
+    },
     "include_zero_end_train": False,
     "exclude_test_groups": [],    # foldy pomijane (reduced_calibration, spatial), np. ["dT=0.0"]
     "training_dataset": "Output_files/training_dataset.csv",

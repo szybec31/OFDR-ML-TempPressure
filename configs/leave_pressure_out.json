@@ -1,9 +1,13 @@
 {
   "name": "leave_pressure_out",
-  "description": "Leave-one-pressure-level-out: w każdym foldzie testem jest jeden poziom ciśnienia we wszystkich temperaturach. Fold p=0 usuwa wszystkie rekordy kalibracji temperaturowej, więc AN-BL i AN-BL-NEAREST są tam N/A. Foldy p=0 i p=10 wymagają ekstrapolacji po ciśnieniu.",
+  "description": "Leave-one-pressure-level-out: w każdym foldzie testem jest jeden poziom ciśnienia we wszystkich temperaturach. Fold p=0 usuwa wszystkie rekordy kalibracji temperaturowej, więc AN-BL jest tam N/A, a AN-BL-NEAREST kalibruje A, B na najbliższym dostępnym poziomie ciśnienia. Odniesienie: AN-JOINT (działa we wszystkich foldach). Foldy p=0 i p=10 wymagają ekstrapolacji po ciśnieniu.",
   "seed": 42,
   "split": "pressure",
   "features": ["mu_Y", "mu_X", "m", "d", "std_Y", "std_X", "iqr_Y", "iqr_X"],
-  "models": ["AN-BL", "AN-BL-NEAREST", "AN-JOINT", "CD-LIN", "CD-POLY", "MO-LR", "POLY2-RIDGE", "SVR-RBF", "NYSTROEM-SVR", "RF"],
-  "baseline": "AN-BL-NEAREST"
+  "models": ["AN-BL", "AN-BL-NEAREST", "AN-JOINT", "CD-LIN", "CD-POLY", "MO-LR", "POLY2-RIDGE", "SVR-RBF", "NYSTROEM-SVR"],
+  "baseline": "AN-JOINT",
+  "model_params": {
+    "AN-BL": {"calibration_temperature": null, "calibration_pressure": 0.0},
+    "AN-BL-NEAREST": {"calibration_temperature": null, "calibration_pressure": 0.0}
+  }
 }

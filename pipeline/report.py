@@ -267,6 +267,46 @@ def plot_rmse_bars(summary, out_path, title, targets):
     plt.close(fig)
 
 
+def plot_rmse_per_fold(folds, models, out_dir, targets, run_name=""):
+    """
+    Jeden wykres na model: RMSE ciśnienia i temperatury w każdym foldzie (oś X: grupa testowa).
+    Foldy, w których model jest N/A, są oznaczone na osi; linia przerywana = średnia po foldach ok.
+    Pliki: <out_dir>/<model>.png
+    """
+    os.makedirs(out_dir, exist_ok=True)
+    groups = folds[["fold", "test_group"]].drop_duplicates().sort_values("fold")
+    labels = [f"{f}: {g}" for f, g in zip(groups["fold"], groups["test_group"])]
+    x = np.arange(len(groups))
+    colors = {targets[0]: "#4C72B0", targets[1]: "#DD8452"}
+    for m in models:
+        f = folds[folds["model"] == m].set_index("fold").reindex(groups["fold"])
+        ok = (f["status"] == "ok").to_numpy()
+        fig, axes = plt.subplots(2, 1, figsize=(max(7, 0.55 * len(x) + 3), 6.5), sharex=True)
+        for ax, t in zip(axes, targets):
+            col = f"{t}_rmse"
+            vals = f[col].to_numpy(dtype=float) if col in f else np.full(len(x), np.nan)
+            ax.bar(x, np.where(np.isnan(vals), 0, vals), color=colors[t])
+            valid = vals[~np.isnan(vals)]
+            if len(valid):
+                ax.axhline(valid.mean(), color="k", ls="--", lw=0.8, label=f"średnia = {valid.mean():.3f}")
+                ax.set_ylim(0, valid.max() * 1.25)
+                ax.legend(loc="upper right", fontsize=8)
+                for xi, v in zip(x, vals):
+                    if not np.isnan(v):
+                        ax.text(xi, v, f"{v:.3f}", ha="center", va="bottom", fontsize=7)
+            for xi in x[~ok]:
+                ax.text(xi, 0, "N/A", ha="center", va="bottom", fontsize=8, color="red")
+            ax.set_ylabel(f"RMSE {t} [{TARGET_UNITS[t]}]")
+            ax.grid(axis="y", alpha=0.3)
+        axes[-1].set_xticks(x)
+        axes[-1].set_xticklabels(labels, rotation=45, ha="right", fontsize=8)
+        axes[-1].set_xlabel("fold: grupa testowa")
+        fig.suptitle(f"{run_name}: {m} - RMSE w foldach ({int(ok.sum())}/{len(x)} ok)")
+        fig.tight_layout()
+        fig.savefig(os.path.join(out_dir, f"{m}.png"), dpi=130)
+        plt.close(fig)
+
+
 def plot_pred_vs_true(predictions, models, fold_ids, out_path, targets):
     test = predictions[(predictions["subset"] == "test") & predictions["fold"].isin(fold_ids)]
     models = [m for m in models if m in set(test["model"])]
@@ -375,6 +415,7 @@ def build_report(result, df, cfg, out_dir):
 
     plot_rmse_bars(summary_common, os.path.join(out_dir, "rmse_common_folds.png"),
                    f"{cfg['name']}: RMSE na wspólnych foldach", targets)
+    plot_rmse_per_fold(folds, models, os.path.join(out_dir, "rmse_per_fold"), targets, cfg["name"])
     plot_pred_vs_true(preds, models, common, os.path.join(out_dir, "pred_vs_true.png"), targets)
     plot_residual_hist(preds, models, common, os.path.join(out_dir, "residuals_hist.png"), targets)
 

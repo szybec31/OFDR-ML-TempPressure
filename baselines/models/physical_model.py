@@ -14,68 +14,122 @@ class PhysicalModel(BaseEstimator, RegressorMixin):
 
         dv_k = A_k * dT^2 + B_k * dT + C_k * p,   k in {X, Y}
 
-    A_k, B_k - kalibracja temperaturowa na rekordach is_temp_calibration (p = 0),
-    C_k      - kalibracja ciśnieniowa na rekordach is_pressure_calibration (dT = 0).
+    A_k, B_k - kalibracja temperaturowa na punktach o ciśnieniu kalibracyjnym (domyślnie p = 0),
+    C_k      - kalibracja ciśnieniowa na punktach o temperaturze kalibracyjnej (domyślnie dT = 0).
+    Punkty kalibracyjne wybierane są spośród rekordów is_joint_regression (zero_end nigdy);
+    dla wartości domyślnych są to dokładnie rekordy is_temp_calibration / is_pressure_calibration.
 
-    Brak wartości domyślnych: jeżeli w danych treningowych brakuje rekordów kalibracyjnych,
-    fit() zgłasza NotIdentifiableError, a fold jest raportowany jako N/A.
+    Brak wartości domyślnych współczynników: jeżeli w danych treningowych brakuje punktów
+    kalibracyjnych (i nie włączono reguły zastępczej), fit() zgłasza NotIdentifiableError,
+    a fold jest raportowany jako N/A.
 
     y: [ciśnienie, temperatura] (po pozycji - kolumną temperatury może być dT albo Tp).
     t_ref: temperatura referencyjna celu temperaturowego; model liczy w T - t_ref (dla dT: 0,
            dla Tp: temperatura płyty w pomiarze referencyjnym). Predykcje wracają w jednostkach celu.
 
-    pressure_calibration:
-        "strict"              - tylko rekordy dT = 0 (dokładnie jak w artykule),
-        "nearest_temperature" - gdy brak dT = 0, używa punktów ciśnieniowych z najniższej
-                                dostępnej temperatury treningowej i odejmuje od nich część
-                                temperaturową wyznaczoną z kalibracji temperaturowej.
+    calibration_temperature: temperatura (w jednostkach celu) serii kalibracji ciśnieniowej;
+                             None -> t_ref (dT = 0, jak w artykule).
+    calibration_pressure:    ciśnienie [MPa] punktów kalibracji temperaturowej (domyślnie 0).
+
+    pressure_calibration - gdy w treningu brak calibration_temperature:
+        "strict"              - N/A (dokładnie jak w artykule),
+        "nearest_temperature" - kalibracja C z najbliższej dostępnej temperatury treningowej.
+    temperature_calibration - gdy w treningu brak calibration_pressure:
+        "strict"              - N/A,
+        "nearest_pressure"    - kalibracja A, B z najbliższego dostępnego poziomu ciśnienia.
+
+    Kolejność kalibracji (część niepochodząca od kalibrowanego członu jest odejmowana):
+        p_cal = 0            -> A, B (bez wyrazu wolnego), potem C po odjęciu A*T^2 + B*T,
+        T_cal = t_ref        -> C, potem A, B (bez wyrazu wolnego) po odjęciu C*p_cal,
+        oba różne od zera    -> A, B z wyrazem wolnym (pochłania C*p_cal), potem C jak wyżej.
     """
 
-    def __init__(self, pressure_calibration="strict", t_ref=0.0):
+    def __init__(self, pressure_calibration="strict", temperature_calibration="strict",
+                 calibration_temperature=None, calibration_pressure=0.0, t_ref=0.0):
         self.pressure_calibration = pressure_calibration
+        self.temperature_calibration = temperature_calibration
+        self.calibration_temperature = calibration_temperature
+        self.calibration_pressure = calibration_pressure
         self.t_ref = t_ref
 
+    @staticmethod
+    def _pick_level(values, other, target, allow_nearest, min_other, what):
+        """
+        Poziom `values` użyty do kalibracji: target, jeżeli występuje w nim >= min_other różnych
+        wartości `other`; w przeciwnym razie (allow_nearest) najbliższy targetowi poziom spełniający
+        ten warunek (remis -> niższy poziom).
+        """
+        def usable(level):
+            return np.unique(other[np.isclose(values, level)]).size >= min_other
+
+        if usable(target):
+            return float(target)
+        if not allow_nearest:
+            raise NotIdentifiableError(f"brak punktów kalibracji {what} = {target:g} w danych treningowych")
+        for level in sorted(np.unique(values), key=lambda v: (abs(v - target), v)):
+            if usable(level):
+                return float(level)
+        raise NotIdentifiableError(f"brak poziomu {what} pozwalającego na kalibrację")
+
     def fit(self, X, y):
+        if self.pressure_calibration not in ("strict", "nearest_temperature"):
+            raise ValueError(f"pressure_calibration = {self.pressure_calibration!r}")
+        if self.temperature_calibration not in ("strict", "nearest_pressure"):
+            raise ValueError(f"temperature_calibration = {self.temperature_calibration!r}")
+
         sig_x = X["mu_X"].to_numpy()
         sig_y = X["mu_Y"].to_numpy()
         y = np.asarray(y, dtype=float)
         p_true = y[:, 0]
         t_true = y[:, 1] - self.t_ref
 
-        mask_temp = (X["is_temp_calibration"] == True).to_numpy()
-        if np.unique(t_true[mask_temp]).size < 2:
+        joint = (X["is_joint_regression"] == True).to_numpy()
+        if not np.any(joint):
+            raise NotIdentifiableError("brak rekordów kalibracyjnych w danych treningowych")
+        t_j, p_j = t_true[joint], p_true[joint]
+
+        t_cal = 0.0 if self.calibration_temperature is None else float(self.calibration_temperature) - self.t_ref
+        p_cal = float(self.calibration_pressure)
+
+        # A, B bez wyrazu wolnego: 2 poziomy temperatury; z wyrazem wolnym (p != 0): 3
+        p_used = self._pick_level(p_j, t_j, p_cal, self.temperature_calibration == "nearest_pressure",
+                                  2 if np.isclose(p_cal, 0) else 3, "ciśnienia p")
+        t_used = self._pick_level(t_j, p_j, t_cal, self.pressure_calibration == "nearest_temperature",
+                                  2, "temperatury T - t_ref")
+        if not np.isclose(p_used, 0) and np.unique(t_j[np.isclose(p_j, p_used)]).size < 3:
             raise NotIdentifiableError("za mało poziomów temperatury do kalibracji A, B")
 
-        T = t_true[mask_temp]
-        feat_T = np.column_stack([T ** 2, T])
-        self.Ax_, self.Bx_ = LinearRegression(fit_intercept=False).fit(feat_T, sig_x[mask_temp]).coef_
-        self.Ay_, self.By_ = LinearRegression(fit_intercept=False).fit(feat_T, sig_y[mask_temp]).coef_
+        mask_temp = joint & np.isclose(p_true, p_used)
+        mask_press = joint & np.isclose(t_true, t_used)
+        T, P_t = t_true[mask_temp], p_true[mask_temp]
+        T_p, P = t_true[mask_press], p_true[mask_press]
 
-        mask_press = (X["is_pressure_calibration"] == True).to_numpy()
-        self.pressure_calibration_T_ = 0.0
+        def fit_ab(target_x, target_y, intercept):
+            feat = np.column_stack([T ** 2, T])
+            return (LinearRegression(fit_intercept=intercept).fit(feat, target_x).coef_,
+                    LinearRegression(fit_intercept=intercept).fit(feat, target_y).coef_)
 
-        if not np.any(mask_press):
-            if self.pressure_calibration != "nearest_temperature":
-                raise NotIdentifiableError("brak rekordów kalibracji ciśnieniowej (dT = 0)")
+        def fit_c(temp_part_x, temp_part_y):
+            P2 = P.reshape(-1, 1)
+            return (LinearRegression(fit_intercept=False).fit(P2, sig_x[mask_press] - temp_part_x).coef_[0],
+                    LinearRegression(fit_intercept=False).fit(P2, sig_y[mask_press] - temp_part_y).coef_[0])
 
-            joint = (X["is_joint_regression"] == True).to_numpy()
-            if not np.any(joint):
-                raise NotIdentifiableError("brak rekordów ciśnieniowych w danych treningowych")
-            t_low = np.min(t_true[joint])
-            mask_press = joint & (t_true == t_low)
-            self.pressure_calibration_T_ = float(t_low)
+        def temp_part():
+            return self.Ax_ * T_p ** 2 + self.Bx_ * T_p, self.Ay_ * T_p ** 2 + self.By_ * T_p
 
-        P = p_true[mask_press]
-        if np.unique(P).size < 2:
-            raise NotIdentifiableError("za mało poziomów ciśnienia do kalibracji C")
+        if np.isclose(p_used, 0):
+            (self.Ax_, self.Bx_), (self.Ay_, self.By_) = fit_ab(sig_x[mask_temp], sig_y[mask_temp], False)
+            self.Cx_, self.Cy_ = fit_c(*temp_part())
+        elif np.isclose(t_used, 0):
+            self.Cx_, self.Cy_ = fit_c(0.0, 0.0)
+            (self.Ax_, self.Bx_), (self.Ay_, self.By_) = fit_ab(
+                sig_x[mask_temp] - self.Cx_ * P_t, sig_y[mask_temp] - self.Cy_ * P_t, False)
+        else:
+            (self.Ax_, self.Bx_), (self.Ay_, self.By_) = fit_ab(sig_x[mask_temp], sig_y[mask_temp], True)
+            self.Cx_, self.Cy_ = fit_c(*temp_part())
 
-        T_p = t_true[mask_press]
-        # odejmujemy część temperaturową (dla dT = 0 jest równa zeru)
-        res_x = sig_x[mask_press] - (self.Ax_ * T_p ** 2 + self.Bx_ * T_p)
-        res_y = sig_y[mask_press] - (self.Ay_ * T_p ** 2 + self.By_ * T_p)
-        self.Cx_ = LinearRegression(fit_intercept=False).fit(P.reshape(-1, 1), res_x).coef_[0]
-        self.Cy_ = LinearRegression(fit_intercept=False).fit(P.reshape(-1, 1), res_y).coef_[0]
-
+        self.pressure_calibration_T_ = float(t_used)
+        self.temperature_calibration_p_ = float(p_used)
         self.t_train_range_ = (float(np.min(t_true)), float(np.max(t_true)))
         return self
 
@@ -84,8 +138,10 @@ class PhysicalModel(BaseEstimator, RegressorMixin):
             "Ax": self.Ax_, "Bx": self.Bx_, "Cx": self.Cx_,
             "Ay": self.Ay_, "By": self.By_, "Cy": self.Cy_,
             "t_ref": self.t_ref,
-            # temperatura (T - t_ref) punktów użytych do kalibracji ciśnieniowej
+            # temperatura (T - t_ref) punktów użytych do kalibracji ciśnieniowej (C)
             "pressure_calibration_T": self.pressure_calibration_T_,
+            # ciśnienie punktów użytych do kalibracji temperaturowej (A, B)
+            "temperature_calibration_p": self.temperature_calibration_p_,
         }
 
     def predict(self, X):
@@ -174,5 +230,5 @@ class JointPhysicalModel(BaseEstimator, RegressorMixin):
         return np.column_stack([p, T + self.t_ref])
 
 
-def train_physical_model(X, y, pressure_calibration="strict", t_ref=0.0):
-    return PhysicalModel(pressure_calibration=pressure_calibration, t_ref=t_ref).fit(X, y)
+def train_physical_model(X, y, pressure_calibration="strict", t_ref=0.0, **kwargs):
+    return PhysicalModel(pressure_calibration=pressure_calibration, t_ref=t_ref, **kwargs).fit(X, y)

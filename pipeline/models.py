@@ -25,13 +25,18 @@ class ModelSpec:
 # Siatki = stan z końca semestru 1 (commit 2f4e5c7).
 MODEL_REGISTRY = {
     "AN-BL": ModelSpec(
-        "AN-BL", lambda seed: PhysicalModel(pressure_calibration="strict"), kind="physical",
-        description="Model analityczny z artykułu, kalibracja sekwencyjna; brak dT=0 w treningu -> N/A",
+        "AN-BL", lambda seed: PhysicalModel(pressure_calibration="strict", temperature_calibration="strict"),
+        kind="physical",
+        description="Model analityczny z artykułu, kalibracja sekwencyjna; brak punktów kalibracyjnych "
+                    "(domyślnie dT=0 / p=0) w treningu -> N/A",
     ),
     "AN-BL-NEAREST": ModelSpec(
-        "AN-BL-NEAREST", lambda seed: PhysicalModel(pressure_calibration="nearest_temperature"),
+        "AN-BL-NEAREST",
+        lambda seed: PhysicalModel(pressure_calibration="nearest_temperature",
+                                   temperature_calibration="nearest_pressure"),
         kind="physical",
-        description="Jak AN-BL, ale bez dT=0 kalibracja ciśnieniowa z najniższej dostępnej temperatury",
+        description="Jak AN-BL, ale gdy w treningu brak punktów kalibracyjnych: C z najbliższej dostępnej "
+                    "temperatury, A i B z najbliższego dostępnego poziomu ciśnienia",
     ),
     "AN-JOINT": ModelSpec(
         "AN-JOINT", lambda seed: JointPhysicalModel(), features=["mu_X", "mu_Y"], min_states=3,
@@ -82,8 +87,19 @@ MODEL_REGISTRY = {
 
 
 def build_estimator(spec, seed, cfg):
-    """Nienauczony estymator; modele fizyczne dostają temperaturę referencyjną celu (t_ref)."""
+    """
+    Nienauczony estymator; modele fizyczne dostają temperaturę referencyjną celu (t_ref).
+    cfg["model_params"][nazwa] - nadpisania parametrów konstruktora (np. dla AN-BL / AN-BL-NEAREST:
+    calibration_temperature, calibration_pressure, pressure_calibration, temperature_calibration).
+    """
     est = spec.build(seed)
+    params = (cfg.get("model_params") or {}).get(spec.name) or {}
+    unknown = sorted(set(params) - set(est.get_params(deep=False)))
+    if unknown:
+        raise ValueError(f"model_params[{spec.name!r}]: nieznane parametry {unknown}; "
+                         f"dostępne: {sorted(est.get_params(deep=False))}")
+    if params:
+        est.set_params(**params)
     if "t_ref" in est.get_params(deep=False):
         t_ref = cfg.get("temperature_reference", 0.0)
         if not isinstance(t_ref, (int, float)):
