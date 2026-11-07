@@ -7,6 +7,7 @@ Struktura konfiguracji (wszystkie klucze poza "name" mają wartości domyślne z
     name, description, seed, data, drop_low_quality, temperature_target, temperature_reference,
     split, blocks, inner_cv, n_jobs, features, models, baseline, common_folds, grids, model_params,
     include_zero_end_train, roi_window_cm, roi_window_min_coverage, train_windows_per_sample,
+    conformal, uncertainty, final_table,
     variants: [ {name, ...dowolne nadpisania powyższych kluczy...}, ... ]   (opcjonalne)
 
 Klucz "experiment" wybiera rodzaj eksperymentu:
@@ -34,7 +35,9 @@ from .cv import run_cv
 from .models import get_model_spec
 from .reduced_calibration import run_reduced_calibration
 from .roi_windows import window_table
+from .final_table import build_final_table, compact_final_table
 from .report import build_report, compact_summary, plot_rmse_vs_window, write_table
+from .uncertainty import run_uncertainty
 from .spatial import run_spatial
 from .metrics import TEMPERATURE_TARGETS, get_targets, temperature_target
 from .splits import condition_labels, split_diagnostics
@@ -75,6 +78,13 @@ DEFAULTS = {
     "roi_window_cache_dir": "Output_files/roi_windows",
     "roi_window_cache_lengths": [1, 2, 5, 10, 25, 50, 100],
     "train_windows_per_sample": None,        # opcjonalnie: losowo tyle okien na próbkę w treningu
+    # pkt 10: grupowa predykcja konforemna z predykcji out-of-fold (pipeline/conformal.py);
+    # block: "fold" (grupa testowa folda) albo kolumna, np. "series_id"
+    "conformal": {"alphas": [0.10, 0.05], "block": "fold"},
+    # pkt 10: replikacje z ponownym dopasowaniem (pipeline/uncertainty.py); n_replicates = 0 -> wyłączone
+    "uncertainty": {"n_replicates": 0},
+    # pkt 11: tabela końcowa z wariantów (pipeline/final_table.py); None -> brak
+    "final_table": None,
     "exclude_test_groups": [],    # foldy pomijane (reduced_calibration, spatial), np. ["dT=0.0"]
     "training_dataset": "Output_files/training_dataset.csv",
     "bin_cache": "Output_files/spatial_bins_{base}cm.npz",
@@ -190,6 +200,7 @@ def run_variant(cfg, out_dir):
     result = run_cv(df, cfg)
     result["split_diagnostics"] = split_diagnostics(df, result["fold_defs"], temperature_target(cfg))
     info = build_report(result, df, cfg, out_dir)
+    info["uncertainty"] = run_uncertainty(df, cfg, result, info, out_dir)
 
     print(f"\n[{cfg['name']}] foldy referencyjne ({info['common_folds_policy']}): {info['common_folds']}, "
           f"wykluczone: {info['excluded_folds']}")
@@ -226,6 +237,7 @@ def run_from_config(path):
         variants = [{}]
 
     rows, rows_samples = [], []
+    infos = {}
     for v in variants:
         cfg = copy.deepcopy(base)
         cfg.update(v)
@@ -238,6 +250,7 @@ def run_from_config(path):
         info = run_variant(cfg, out_dir)
         if info is None:
             continue
+        infos[v.get("name", base["name"])] = info
 
         s = info["summary_common"].copy()
         s.insert(0, "variant", v.get("name", base["name"]))
@@ -263,6 +276,19 @@ def run_from_config(path):
                         "Porównanie wariantów na poziomie próbki (predykcja = średnia z okien ROI)")
             win = summary.assign(roi_window_cm=samples["roi_window_cm"].to_numpy())
             plot_rmse_vs_window(win, samples, os.path.join(run_dir, "rmse_vs_roi_window.png"), get_targets(base))
+
+    if base.get("final_table") and infos:
+        targets = get_targets(base)
+        table, ft = build_final_table(infos, base, targets)
+        write_table(table, run_dir, "final_comparison",
+                    f"Końcowe porównanie modeli (pkt 11): schemat główny {ft['main']}; LOSO / LOTO / LOPO = "
+                    f"{ft['loso']} / {ft['loto']} / {ft['lopo']}; przedziały predykcji z {ft['conformal']}; "
+                    f"zero_end z {ft['zero_end']}", 4)
+        write_table(compact_final_table(table, targets, ft), run_dir, "final_comparison_compact",
+                    "Końcowe porównanie modeli (pkt 11). Średnie po foldach referencyjnych; max|e| = maksimum po "
+                    "predykcjach testowych; PI = połowa szerokości przedziału konforemnego (inf = za mało bloków); "
+                    "min. l. stanów = identyfikowalność / empirycznie (run_reduced)")
+        print("\nTABELA KOŃCOWA:\n" + compact_final_table(table, targets, ft).to_string(index=False))
 
     meta["finished"] = datetime.now().isoformat(timespec="seconds")
     with open(os.path.join(run_dir, "run_meta.json"), "w", encoding="utf-8") as f:

@@ -13,7 +13,7 @@ from sklearn.metrics import r2_score
 PRESSURE = "pressure"
 DEFAULT_TEMPERATURE = "dT"
 TEMPERATURE_TARGETS = ("dT", "Tp")
-METRICS = ["mae", "rmse", "maxae", "bias", "r2"]
+METRICS = ["mae", "mse", "rmse", "maxae", "bias", "r2"]
 TARGET_UNITS = {"pressure": "MPa", "dT": "°C", "Tp": "°C"}
 
 
@@ -33,6 +33,7 @@ def target_metrics(y_true, y_pred):
     err = np.asarray(y_pred, dtype=float) - np.asarray(y_true, dtype=float)
     out = {
         "mae": float(np.mean(np.abs(err))),
+        "mse": float(np.mean(err ** 2)),
         "rmse": float(np.sqrt(np.mean(err ** 2))),
         "maxae": float(np.max(np.abs(err))),
         "bias": float(np.mean(err)),          # średni błąd ze znakiem (pred - true)

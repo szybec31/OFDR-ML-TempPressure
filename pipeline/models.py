@@ -2,6 +2,8 @@
 from dataclasses import dataclass, field, replace
 from typing import Callable, Optional
 
+import numpy as np
+
 from baselines.models.hybrid import HybridPhysicalModel
 from baselines.models.linear import build_linear
 from baselines.models.nystroem_svr import build_nystroem_svr
@@ -142,3 +144,96 @@ def _parse_grid(grid):
         k: [tuple(v) if isinstance(v, list) else v for v in values]
         for k, values in grid.items()
     }
+
+
+# ---------------------------------------------------------------- liczba parametrów, współczynniki
+
+def count_parameters(est):
+    """
+    Liczba parametrów dopasowywanych na danych, używanych w predykcji (bez standaryzacji cech).
+    Zwraca (liczba, rodzaj): "parametric" - liczba stała dla danego zestawu cech,
+    "nonparametric" - rośnie z danymi (SVR: współczynniki dualne, GP: wagi alpha_, RF: węzły drzew).
+    """
+    from sklearn.ensemble import RandomForestRegressor
+    from sklearn.gaussian_process import GaussianProcessRegressor
+    from sklearn.kernel_approximation import Nystroem
+    from sklearn.multioutput import MultiOutputRegressor
+    from sklearn.pipeline import Pipeline
+    from sklearn.svm import SVR
+
+    if isinstance(est, PhysicalModel):
+        return 6, "parametric"
+    if isinstance(est, JointPhysicalModel):
+        return (8 if est.fit_intercept else 6), "parametric"
+    if isinstance(est, HybridPhysicalModel):
+        n, kind = count_parameters(est.physical_)
+        for m in est.residual_models_:
+            k, kk = count_parameters(m)
+            n += k
+            kind = "nonparametric" if kk == "nonparametric" else kind
+        return n, kind
+    if isinstance(est, Pipeline):
+        n, kind = 0, "parametric"
+        for _, step in est.steps:
+            k, kk = count_parameters(step)
+            n += k
+            kind = "nonparametric" if kk == "nonparametric" else kind
+        return n, kind
+    if isinstance(est, MultiOutputRegressor):
+        parts = [count_parameters(e) for e in est.estimators_]
+        return sum(k for k, _ in parts), ("nonparametric" if any(kk == "nonparametric" for _, kk in parts)
+                                          else "parametric")
+    if isinstance(est, SVR):
+        return int(est.dual_coef_.size + est.intercept_.size), "nonparametric"
+    if isinstance(est, GaussianProcessRegressor):
+        return int(est.alpha_.size + est.kernel_.theta.size), "nonparametric"
+    if isinstance(est, RandomForestRegressor):
+        return int(sum(t.tree_.node_count for t in est.estimators_)), "nonparametric"
+    if isinstance(est, Nystroem):
+        return 0, "parametric"     # punkty bazowe to próbka danych; wagi liczy LinearSVR
+    if hasattr(est, "coef_"):
+        return int(np.size(est.coef_) + np.size(getattr(est, "intercept_", 0))), "parametric"
+    return 0, "parametric"    # przekształcenia bez parametrów (StandardScaler, PolynomialFeatures)
+
+
+def model_coefficients(model, features, targets):
+    """
+    Współczynniki modelu w formacie długim [{target, term, value, space}, ...]:
+        modele fizyczne (AN-*)                  - A, B, C (D) dla kanałów X, Y (target = "signal"),
+        Pipeline(scaler -> linear/ridge)        - przeliczone na jednostki oryginalnych cech (space = "raw"),
+        Pipeline(scaler -> poly -> ridge)       - w przestrzeni cech standaryzowanych (space = "standardized").
+    Dla pozostałych modeli (SVR, RF, GP, hybrydy) - pusta lista.
+    """
+    from sklearn.pipeline import Pipeline
+    from sklearn.preprocessing import PolynomialFeatures, StandardScaler
+
+    if isinstance(model, (PhysicalModel, JointPhysicalModel)):
+        # tylko współczynniki modelu (bez t_ref i metadanych kalibracji); D tylko z wyrazem wolnym
+        keys = ["Ax", "Bx", "Cx", "Ay", "By", "Cy"]
+        if getattr(model, "fit_intercept", False):
+            keys += ["Dx", "Dy"]
+        c = model.coefficients()
+        return [{"target": "signal", "term": k, "value": float(c[k]), "space": "raw"} for k in keys]
+    if not isinstance(model, Pipeline):
+        return []
+    steps = dict(model.steps)
+    final = model.steps[-1][1]
+    if not hasattr(final, "coef_"):
+        return []
+    coef = np.atleast_2d(final.coef_)
+    intercept = np.broadcast_to(np.asarray(final.intercept_, dtype=float), (coef.shape[0],))
+    scaler = steps.get("scaler")
+    poly = next((s for s in steps.values() if isinstance(s, PolynomialFeatures)), None)
+    rows = []
+    if poly is None and isinstance(scaler, StandardScaler):
+        raw = coef / scaler.scale_
+        raw_int = intercept - raw @ scaler.mean_
+        names, space = list(features), "raw"
+        coef, intercept = raw, raw_int
+    else:
+        names = list(poly.get_feature_names_out(features)) if poly is not None else list(features)
+        space = "standardized"
+    for j, t in enumerate(targets[:coef.shape[0]]):
+        rows.append({"target": t, "term": "intercept", "value": float(intercept[j]), "space": space})
+        rows += [{"target": t, "term": n, "value": float(c), "space": space} for n, c in zip(names, coef[j])]
+    return rows

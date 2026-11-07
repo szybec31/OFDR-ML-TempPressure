@@ -22,6 +22,7 @@ import numpy as np
 import pandas as pd
 from scipy.stats import ttest_rel, wilcoxon
 
+from .conformal import DEFAULT_ALPHAS, conformal_intervals
 from .metrics import TARGET_UNITS, evaluate, get_targets, metric_names
 
 ALPHA = 0.05
@@ -192,6 +193,27 @@ def gain_table(folds, baseline, models, fold_ids, targets):
             row[f"G_{t}_ge_15"] = bool(row[f"G_{t}_percent"] >= 15)
         rows.append(row)
     return pd.DataFrame(rows)
+
+
+def parameter_table(folds, models):
+    ok = folds[(folds["status"] == "ok") & folds["n_params"].notna()]
+    rows = []
+    for m in models:
+        f = ok[ok["model"] == m]
+        if f.empty:
+            continue
+        rows.append({"model": m, "n_params": float(f["n_params"].median()),
+                     "n_params_min": float(f["n_params"].min()), "n_params_max": float(f["n_params"].max()),
+                     "param_kind": f["param_kind"].iloc[0]})
+    return pd.DataFrame(rows)
+
+
+def coefficient_summary(coefs, group_cols=("model", "target", "term", "space"), ci=0.95):
+    """Mediana i przedział percentylowy ci (lo, hi) współczynników - po foldach albo po replikacjach."""
+    lo, hi = (1 - ci) / 2, 1 - (1 - ci) / 2
+    g = coefs.groupby(list(group_cols), sort=False)["value"]
+    return g.agg(n="size", median="median", lo=lambda v: v.quantile(lo), hi=lambda v: v.quantile(hi),
+                 std="std").reset_index()
 
 
 # ---------------------------------------------------------------- interpolacja / ekstrapolacja
@@ -547,6 +569,11 @@ def build_report(result, df, cfg, out_dir):
     preds.to_csv(os.path.join(out_dir, "predictions.csv.gz" if windowed else "predictions.csv"), index=False)
     if not result["coefficients"].empty:
         write_table(result["coefficients"], out_dir, "physical_coefficients", "Współczynniki modeli analitycznych per fold", 6)
+    coefs = result.get("model_coefficients", pd.DataFrame())
+    if not coefs.empty:
+        coefs.to_csv(os.path.join(out_dir, "model_coefficients.csv"), index=False)
+        write_table(coefficient_summary(coefs), out_dir, "model_coefficients_summary",
+                    "Współczynniki modeli (fizyczne, CD-*, liniowe) - mediana i rozrzut po foldach", 6)
 
     all_folds = sorted(folds["fold"].unique().tolist())
     policy = cfg.get("common_folds", "baseline") if baseline else "all"
@@ -577,8 +604,24 @@ def build_report(result, df, cfg, out_dir):
         title += (f". UWAGA: {', '.join(short)} - mniej foldów (N/A w części foldów), "
                   f"ich średnie nie są wprost porównywalne z resztą; porównanie parami: paired_tests, gain_vs_baseline")
     write_table(compact_summary(summary_common, targets), out_dir, "results_table", title)
-    write_table(pooled_metrics(preds, models, common, targets), out_dir, "pooled_metrics",
+    pooled = pooled_metrics(preds, models, common, targets)
+    write_table(pooled, out_dir, "pooled_metrics",
                 "Metryki pooled (predykcje ze wspólnych foldów złączone), w tym R^2 globalne")
+    if "n_params" in folds:
+        write_table(parameter_table(folds, models), out_dir, "model_parameters",
+                    "Liczba parametrów dopasowywanych na danych (mediana po foldach; bez standaryzacji cech)", 0)
+
+    conformal = pd.DataFrame()
+    conf_cfg = cfg.get("conformal") or {}
+    if conf_cfg.get("enabled", not windowed):     # okna ROI: setki tysięcy predykcji - domyślnie wyłączone
+        conformal, conf_blocks = conformal_intervals(
+            preds, models, targets, common, conf_cfg.get("alphas", DEFAULT_ALPHAS), conf_cfg.get("block", "fold"))
+        if not conformal.empty:
+            conf_blocks.to_csv(os.path.join(out_dir, "conformal_per_block.csv"), index=False)
+            write_table(conformal, out_dir, "conformal_intervals",
+                        f"Grupowa predykcja konforemna (blok = {conf_cfg.get('block', 'fold')}, predykcje out-of-fold, "
+                        "foldy referencyjne): połowa szerokości q, szerokość 2q, pokrycie leave-one-block-out; "
+                        "inf = za mało bloków dla danego poziomu", 3)
 
     summary_samples = None
     if windowed:
@@ -636,4 +679,6 @@ def build_report(result, df, cfg, out_dir):
     plot_residual_hist(preds, models, common, os.path.join(out_dir, "residuals_hist.png"), targets)
 
     return {"common_folds": common, "excluded_folds": excluded, "summary_common": summary_common,
-            "summary_samples": summary_samples, "common_folds_policy": policy}
+            "summary_samples": summary_samples, "common_folds_policy": policy,
+            "pooled": pooled, "conformal": conformal, "folds": folds,
+            "rd_summary": residual_drift_summary(rd) if not rd.empty else pd.DataFrame()}

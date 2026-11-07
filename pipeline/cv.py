@@ -17,7 +17,7 @@ from sklearn.model_selection import GridSearchCV, GroupKFold
 
 from baselines.models.physical_model import NotIdentifiableError
 from .metrics import get_targets, evaluate
-from .models import build_estimator, get_model_spec
+from .models import build_estimator, count_parameters, get_model_spec, model_coefficients
 from .splits import make_folds
 
 
@@ -71,7 +71,8 @@ def run_cv(df, cfg):
     is_joint = df["is_joint_regression"] == True
     is_zero_end = df["is_repeatability_test"] == True
 
-    fold_rows, pred_rows, coef_rows = [], [], []
+    fold_rows, pred_rows, coef_rows, coef_long = [], [], [], []
+    best_params_all = {}      # (fold, model) -> hiperparametry wybrane w strojeniu (replikacje, pkt 10)
     # dT i Tp zawsze zapisywane jako metadane; prawdziwa wartość celu jest w kolumnie t_col
     meta_cols = ["sample_id", "series_id", "rep_idx", "dT", "Tp", "pressure", "point_type"]
     windowed = "window" in df.columns
@@ -104,6 +105,7 @@ def run_cv(df, cfg):
                     best_params = {}
                     coef_rows.append({"fold": fold_id, "test_group": g, "model": spec.name, **model.coefficients()})
                     predict = lambda d: model.predict(d)
+                    feats = ["mu_X", "mu_Y"]
                     row["n_train"] = int((train["is_temp_calibration"] | train["is_pressure_calibration"]).sum())
                 else:
                     feats = spec.features or features
@@ -118,6 +120,10 @@ def run_cv(df, cfg):
 
             row["status"] = "ok"
             row["best_params"] = str(best_params) if best_params else ""
+            best_params_all[(fold_id, spec.name)] = {k: v for k, v in best_params.items() if not k.startswith("_")}
+            row["n_params"], row["param_kind"] = count_parameters(model)
+            coef_long += [{"fold": fold_id, "test_group": g, "model": spec.name, **c}
+                          for c in model_coefficients(model, feats, targets)]
 
             for subset, part in [("test", test_main), ("zero_end", test_zero_end)]:
                 if part.empty:
@@ -146,5 +152,7 @@ def run_cv(df, cfg):
         "folds": pd.DataFrame(fold_rows),
         "predictions": pd.concat(pred_rows, ignore_index=True) if pred_rows else pd.DataFrame(),
         "coefficients": pd.DataFrame(coef_rows),
+        "model_coefficients": pd.DataFrame(coef_long),
+        "best_params": best_params_all,
         "fold_defs": folds,
     }

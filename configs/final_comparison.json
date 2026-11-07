@@ -1,0 +1,26 @@
+{
+  "name": "final_comparison",
+  "description": "Punkty 10 i 11. Cztery schematy walidacji (condition = główny, series, temperature, pressure) dla wszystkich modeli; w każdym wariancie grupowa predykcja konforemna (90%, 95%) z predykcji out-of-fold oraz replikacje (bootstrap blokowy po warunkach (T, p), ponowne dopasowanie modeli, mediana i 95% przedział RMSE, różnicy RMSE względem AN-JOINT i współczynników). Tabela końcowa: final_comparison(_compact). LOSO = LOTO w tych danych (1 seria = 1 temperatura), dlatego w wariancie series replikacje są wyłączone. Opis: docs/niepewnosc_i_porownanie.md.",
+  "seed": 42,
+  "features": ["mu_Y", "mu_X", "m", "d", "std_Y", "std_X", "iqr_Y", "iqr_X"],
+  "models": ["AN-BL", "AN-BL-NEAREST", "AN-JOINT", "CD-LIN", "CD-POLY", "MO-LR", "POLY2-RIDGE", "SVR-RBF", "NYSTROEM-SVR", "HYB-JOINT-RIDGE", "HYB-JOINT-GP"],
+  "baseline": "AN-JOINT",
+  "model_params": {
+    "AN-BL": {"calibration_temperature": null, "calibration_pressure": 0.0},
+    "AN-BL-NEAREST": {"calibration_temperature": null, "calibration_pressure": 0.0}
+  },
+  "conformal": {"alphas": [0.10, 0.05], "block": "fold"},
+  "uncertainty": {"n_replicates": 200, "block": "condition_id", "resample_test_folds": true, "tune": "fixed",
+                  "reference": "AN-JOINT", "ci": 0.95, "full_data_fit": true},
+  "final_table": {"main": "condition", "loso": "series", "loto": "temperature", "lopo": "pressure",
+                  "conformal": "condition", "zero_end": "condition",
+                  "reduced_calibration": null, "reduced_threshold": 10},
+  "variants": [
+    {"name": "condition", "split": "condition", "inner_cv": {"n_splits": 3, "group": "condition_id"},
+     "uncertainty": {"n_replicates": 50, "block": "condition_id", "resample_test_folds": true, "tune": "fixed",
+                     "reference": "AN-JOINT", "ci": 0.95, "full_data_fit": true}},
+    {"name": "series", "split": "series", "uncertainty": {"n_replicates": 0}},
+    {"name": "temperature", "split": "temperature"},
+    {"name": "pressure", "split": "pressure"}
+  ]
+}

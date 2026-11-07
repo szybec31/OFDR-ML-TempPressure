@@ -228,6 +228,9 @@ Najważniejsze klucze (wartości domyślne są w `DEFAULTS` w [pipeline/runner.p
 | `grids` | nadpisanie siatek hiperparametrów |
 | `model_params` | nadpisanie parametrów modeli, np. punkt kalibracji AN-BL / AN-BL-NEAREST: `calibration_temperature` (jednostki celu, `null` = ΔT = 0), `calibration_pressure` (MPa, domyślnie 0), `pressure_calibration` (`strict` / `nearest_temperature`), `temperature_calibration` (`strict` / `nearest_pressure`) |
 | `roi_window_cm` | `"full"` (domyślnie) albo długość okna ROI w cm; patrz punkt 8 |
+| `conformal` | grupowa predykcja konforemna z predykcji out-of-fold: `alphas` (domyślnie 0,10 i 0,05), `block` (`"fold"` albo kolumna, np. `"series_id"`) |
+| `uncertainty` | replikacje (bootstrap blokowy) z ponownym dopasowaniem: `n_replicates` (0 = wyłączone), `block`, `tune`, `reference`, `ci`; opis w [niepewnosc_i_porownanie.md](niepewnosc_i_porownanie.md) |
+| `final_table` | tabela końcowa z wariantów: które warianty to schemat główny, LOSO, LOTO, LOPO, przedziały i zero_end |
 | `variants` | lista wariantów; każdy nadpisuje dowolne klucze i trafia do osobnego podkatalogu |
 
 ### Co dzieje się po uruchomieniu (`runner.run_from_config`)
@@ -308,6 +311,7 @@ Mają własny kod, ale ten sam mechanizm configów (klucz `"experiment"`).
 | `run_reduced` | [pipeline/reduced_calibration.py](../pipeline/reduced_calibration.py) + [calibration_design.py](../pipeline/calibration_design.py) | ile stanów kalibracyjnych naprawdę potrzeba? | [pkt6_7.md](pkt6_7.md) |
 | `run_spatial` | [pipeline/spatial.py](../pipeline/spatial.py) | jak dokładność zależy od długości okna wzdłuż włókna? | [pkt6_7.md](pkt6_7.md) |
 | `run_drift` | [pipeline/drift.py](../pipeline/drift.py) + zwykłe CV | zadanie 9: dryft zero_end, wpływ na T i p, wskaźnik jakości | [dryft_zero_end.md](dryft_zero_end.md) |
+| `run_final` | [pipeline/uncertainty.py](../pipeline/uncertainty.py), [conformal.py](../pipeline/conformal.py), [final_table.py](../pipeline/final_table.py) + zwykłe CV | zadania 10-11: niepewność (replikacje, predykcja konforemna) i tabela końcowa | [niepewnosc_i_porownanie.md](niepewnosc_i_porownanie.md) |
 | `run_roi` | [pipeline/roi_windows.py](../pipeline/roi_windows.py) + zwykłe CV | czy dzielenie ROI na okna (więcej wierszy uczących) poprawia modele? | niżej |
 
 `run_spatial` i `run_roi` wracają do surowych plików `.txt`. Za pierwszym razem zapisują cache:
